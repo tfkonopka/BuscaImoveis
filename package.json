@@ -1,0 +1,28 @@
+{
+  "name": "itbi-rio-visualizer",
+  "version": "1.0.0",
+  "description": "Visualizador de preços de imóveis baseado em dados ITBI do Rio de Janeiro",
+  "main": "itbi_visualizer.html",
+  "scripts": {
+    "process-data": "node process_itbi_data.js",
+    "serve": "python -m http.server 8000",
+    "serve-node": "npx http-server"
+  },
+  "keywords": [
+    "itbi",
+    "rio-de-janeiro",
+    "imoveis",
+    "precos",
+    "mapa",
+    "analise",
+    "dados-publicos"
+  ],
+  "author": "Seu Nome",
+  "license": "MIT",
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}

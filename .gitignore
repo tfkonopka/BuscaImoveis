@@ -1,0 +1,41 @@
+
+# Node modules
+node_modules/
+npm-debug.log
+package-lock.json
+yarn.lock
+
+# Dados ITBI (muito grandes)
+itbi_data.xlsx
+itbi_data.json
+
+# Cache
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Ambiente
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# Config local do Claude Code
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+env/
+
+# Buscador — dependências locais (pip --target) e banco SQLite
+buscador/backend/.deps/
+buscador/backend/buscador.db
+*.db

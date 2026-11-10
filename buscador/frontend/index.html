@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Buscador de Imóveis · RJ Zona Sul</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+<style>
+  :root { --bg:#0f1220; --panel:#1a1f35; --line:#2a3152; --fg:#e8ecf7; --mut:#9aa6c7;
+          --acc:#6c8cff; --ok:#3ecf8e; --warn:#ffb020; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg);
+         color:var(--fg); display:grid; grid-template-columns:340px 1fr; height:100vh; }
+  h1 { font-size:16px; margin:0 0 4px; } h2 { font-size:13px; margin:18px 0 8px; color:var(--mut);
+       text-transform:uppercase; letter-spacing:.5px; }
+  aside { background:var(--panel); border-right:1px solid var(--line); overflow:auto; padding:16px; }
+  main { display:grid; grid-template-rows:1fr 320px; min-width:0; }
+  #map { width:100%; height:100%; }
+  .results { background:var(--panel); border-top:1px solid var(--line); overflow:auto; padding:12px; }
+  label { display:block; font-size:12px; color:var(--mut); margin:8px 0 3px; }
+  input,select,button { font:inherit; color:var(--fg); background:#11162a; border:1px solid var(--line);
+         border-radius:8px; padding:8px; width:100%; }
+  .row { display:flex; gap:8px; } .row>* { flex:1; }
+  .chk { display:flex; align-items:center; gap:7px; color:var(--fg); margin:4px 0; cursor:pointer; }
+  .chk input { width:auto; } .chk.off { opacity:.45; }
+  .seg { display:flex; gap:4px; margin:6px 0; } .seg button { padding:6px; font-size:12px; }
+  .seg button.on { background:var(--acc); border-color:var(--acc); color:#fff; }
+  .primary { background:var(--acc); border-color:var(--acc); color:#fff; font-weight:600; margin-top:14px; }
+  .primary:disabled { opacity:.5; }
+  .ghost { background:transparent; }
+  .aviso { background:#3a2e12; border:1px solid var(--warn); color:#ffe0a3; padding:8px;
+           border-radius:8px; margin:8px 0; font-size:12px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--mut); position:sticky; top:0; background:var(--panel); }
+  tr:hover td { background:#222845; cursor:pointer; }
+  .pill { font-size:11px; padding:1px 7px; border-radius:20px; background:#243; color:var(--ok); }
+  .saved { display:flex; justify-content:space-between; align-items:center; gap:6px;
+           background:#11162a; border:1px solid var(--line); border-radius:8px; padding:6px 8px; margin:5px 0; }
+  .saved b { font-weight:600; } .saved small { color:var(--mut); }
+  .mini { width:auto; padding:4px 8px; font-size:12px; }
+  .muted { color:var(--mut); font-size:12px; }
+  a { color:var(--acc); }
+</style>
+</head>
+<body>
+<aside>
+  <h1>🏠 Buscador de Imóveis</h1>
+  <div class="muted">Rio de Janeiro · foco Zona Sul</div>
+
+  <h2>Portais</h2>
+  <div id="portais"></div>
+
+  <h2>Filtros</h2>
+  <label>Operação</label>
+  <select id="operacao"><option value="venda">Venda</option><option value="aluguel">Aluguel</option></select>
+
+  <div class="row">
+    <div><label>Quartos (mín)</label><input id="qmin" type="number" min="0" placeholder="—"></div>
+    <div><label>Quartos (máx)</label><input id="qmax" type="number" min="0" placeholder="—"></div>
+  </div>
+  <div class="row">
+    <div><label>Área mín (m²)</label><input id="amin" type="number" min="0" placeholder="—"></div>
+    <div><label>Área máx (m²)</label><input id="amax" type="number" min="0" placeholder="—"></div>
+  </div>
+  <label>Vagas de garagem (quantidade exata)</label>
+  <input id="vagas" type="number" min="0" placeholder="deixe vazio p/ qualquer; 0 = sem vaga">
+
+  <h2>Localização</h2>
+  <div class="seg" id="loctipo">
+    <button data-t="zona" class="on">Zona</button>
+    <button data-t="bairro">Bairro</button>
+    <button data-t="rua">Rua</button>
+    <button data-t="poligono">Polígono</button>
+  </div>
+  <div id="loc-zona"><label>Zona</label>
+    <select id="zona"><option>Zona Sul</option><option>Zona Norte</option><option>Zona Oeste</option><option>Centro</option></select>
+  </div>
+  <div id="loc-bairro" hidden><label>Bairros (separados por vírgula)</label>
+    <input id="bairros" placeholder="Copacabana, Ipanema, Leblon"></div>
+  <div id="loc-rua" hidden><label>Nome da rua</label>
+    <input id="rua" placeholder="Rua Barão da Torre"></div>
+  <div id="loc-poligono" hidden>
+    <p class="muted">Use a ferramenta de polígono (▱) no mapa para desenhar a área.
+       <b id="poli-status">Nenhum polígono.</b></p>
+    <button class="ghost mini" id="limpa-poli">Limpar polígono</button>
+  </div>
+
+  <button class="primary" id="buscar">🔎 Buscar agora</button>
+
+  <h2>Buscas salvas</h2>
+  <div class="row">
+    <input id="nome-busca" placeholder="Nome desta busca">
+    <button class="ghost mini" id="salvar" style="flex:0 0 auto">Salvar</button>
+  </div>
+  <div id="salvas"></div>
+</aside>
+
+<main>
+  <div id="map"></div>
+  <div class="results">
+    <div id="avisos"></div>
+    <div id="resumo" class="muted">Configure os filtros e clique em <b>Buscar agora</b>.</div>
+    <table><thead><tr>
+      <th>Portal</th><th>Bairro</th><th>Rua</th><th>Quartos</th><th>Vagas</th><th>Área</th><th>Preço</th><th></th>
+    </tr></thead><tbody id="linhas"></tbody></table>
+  </div>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+let poligono = null, markers = L.layerGroup();
+
+// ---- mapa ----
+const map = L.map('map').setView([-22.97, -43.19], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  { attribution:'© OpenStreetMap', maxZoom:19 }).addTo(map);
+markers.addTo(map);
+const drawn = new L.FeatureGroup().addTo(map);
+map.addControl(new L.Control.Draw({
+  draw:{ polygon:true, marker:false, polyline:false, rectangle:false, circle:false, circlemarker:false },
+  edit:{ featureGroup:drawn }
+}));
+map.on(L.Draw.Event.CREATED, e => {
+  drawn.clearLayers(); drawn.addLayer(e.layer);
+  poligono = e.layer.getLatLngs()[0].map(p => [p.lat, p.lng]);
+  $('#poli-status').textContent = `Polígono com ${poligono.length} pontos.`;
+  setLoc('poligono');
+});
+$('#limpa-poli').onclick = () => { drawn.clearLayers(); poligono=null; $('#poli-status').textContent='Nenhum polígono.'; };
+
+// ---- abas de localização ----
+function setLoc(t){
+  document.querySelectorAll('#loctipo button').forEach(b=>b.classList.toggle('on', b.dataset.t===t));
+  ['zona','bairro','rua','poligono'].forEach(x=>$('#loc-'+x).hidden = (x!==t));
+}
+document.querySelectorAll('#loctipo button').forEach(b=> b.onclick=()=>setLoc(b.dataset.t));
+function locTipo(){ return document.querySelector('#loctipo button.on').dataset.t; }
+
+// ---- portais ----
+let PORTAIS = [];
+async function carregaPortais(){
+  PORTAIS = await (await fetch('/api/portais')).json();
+  $('#portais').innerHTML = PORTAIS.map(p=>`
+    <label class="chk ${p.disponivel?'':'off'}">
+      <input type="checkbox" value="${p.nome}" ${p.disponivel?'checked':'disabled'}>
+      ${p.rotulo} ${p.disponivel?'':'<span class="muted">(em breve)</span>'}
+    </label>`).join('');
+}
+
+// ---- montar params ----
+function num(id){ const v=$(id).value.trim(); return v===''?null:Number(v); }
+function coletaParams(){
+  const portais = [...document.querySelectorAll('#portais input:checked')].map(c=>c.value);
+  const t = locTipo();
+  const loc = { tipo:t, zona:$('#zona').value, bairros:[], rua:null, poligono:[] };
+  if(t==='bairro') loc.bairros = $('#bairros').value.split(',').map(s=>s.trim()).filter(Boolean);
+  if(t==='rua') loc.rua = $('#rua').value.trim() || null;
+  if(t==='poligono') loc.poligono = poligono || [];
+  return {
+    portais, operacao:$('#operacao').value,
+    quartos_min:num('#qmin'), quartos_max:num('#qmax'),
+    area_min:num('#amin'), area_max:num('#amax'),
+    vagas:num('#vagas'),
+    localizacao:loc, limite_por_portal:100
+  };
+}
+
+// ---- buscar (só no clique) ----
+$('#buscar').onclick = async () => {
+  const btn=$('#buscar'); btn.disabled=true; btn.textContent='Buscando…';
+  $('#avisos').innerHTML=''; $('#resumo').textContent='Consultando portais…';
+  try{
+    const params = coletaParams();
+    if(params.portais.length===0){ $('#resumo').textContent='Selecione ao menos um portal.'; return; }
+    const r = await fetch('/api/buscar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(params)});
+    const d = await r.json();
+    renderResultados(d);
+  }catch(e){ $('#resumo').textContent='Erro: '+e; }
+  finally{ btn.disabled=false; btn.textContent='🔎 Buscar agora'; }
+};
+
+function fmt(n){ return n==null?'—':n.toLocaleString('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0}); }
+function renderResultados(d){
+  (d.avisos||[]).forEach(a=> $('#avisos').innerHTML += `<div class="aviso">⚠️ ${a}</div>`);
+  const pp = Object.entries(d.por_portal||{}).map(([k,v])=>`${k}: ${v}`).join(' · ');
+  $('#resumo').innerHTML = `<b>${d.total}</b> imóveis após filtros <span class="muted">(coletados — ${pp||'0'})</span>`;
+  markers.clearLayers();
+  $('#linhas').innerHTML = (d.imoveis||[]).map((im,i)=>`
+    <tr data-i="${i}">
+      <td><span class="pill">${im.portal}</span></td>
+      <td>${im.bairro||'—'}</td><td>${im.rua||'—'}</td>
+      <td>${im.quartos??'—'}</td><td>${im.vagas??'—'}</td>
+      <td>${im.area?im.area+' m²':'—'}</td><td>${fmt(im.preco)}</td>
+      <td><a href="${im.url}" target="_blank" rel="noopener">abrir ↗</a></td>
+    </tr>`).join('') || `<tr><td colspan="8" class="muted">Nenhum imóvel encontrado.</td></tr>`;
+  (d.imoveis||[]).forEach(im=>{
+    if(im.lat && im.lon) markers.addLayer(
+      L.marker([im.lat,im.lon]).bindPopup(`<b>${im.bairro}</b> — ${im.rua||''}<br>${im.quartos||'?'} qto · ${im.vagas??'?'} vg · ${im.area||'?'}m²<br>${fmt(im.preco)}<br><a href="${im.url}" target="_blank">ver anúncio</a>`));
+  });
+  window._ult = d.imoveis||[];
+}
+$('#linhas').onclick = e => {
+  const tr=e.target.closest('tr[data-i]'); if(!tr) return;
+  const im=window._ult[+tr.dataset.i]; if(im&&im.lat&&im.lon) map.setView([im.lat,im.lon],17);
+};
+
+// ---- buscas salvas ----
+async function carregaSalvas(){
+  const lst = await (await fetch('/api/buscas')).json();
+  $('#salvas').innerHTML = lst.map(b=>`
+    <div class="saved">
+      <div><b>${b.nome}</b><br><small>${b.criado_em||''}</small></div>
+      <div class="row" style="flex:0 0 auto;gap:4px">
+        <button class="ghost mini" onclick="carregarBusca(${b.id})">Usar</button>
+        <button class="ghost mini" onclick="apagarBusca(${b.id})">✕</button>
+      </div>
+    </div>`).join('') || '<div class="muted">Nenhuma busca salva ainda.</div>';
+  window._salvas = lst;
+}
+$('#salvar').onclick = async () => {
+  const nome = $('#nome-busca').value.trim(); if(!nome){ alert('Dê um nome à busca.'); return; }
+  await fetch('/api/buscas',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({nome, params:coletaParams()})});
+  $('#nome-busca').value=''; carregaSalvas();
+};
+window.apagarBusca = async id => { await fetch('/api/buscas/'+id,{method:'DELETE'}); carregaSalvas(); };
+window.carregarBusca = id => {
+  const b = window._salvas.find(x=>x.id===id); if(!b) return; const p=b.params;
+  document.querySelectorAll('#portais input').forEach(c=> c.checked = p.portais.includes(c.value) && !c.disabled);
+  $('#operacao').value=p.operacao;
+  $('#qmin').value=p.quartos_min??''; $('#qmax').value=p.quartos_max??'';
+  $('#amin').value=p.area_min??''; $('#amax').value=p.area_max??'';
+  $('#vagas').value=p.vagas??'';
+  const l=p.localizacao; setLoc(l.tipo); $('#zona').value=l.zona||'Zona Sul';
+  $('#bairros').value=(l.bairros||[]).join(', '); $('#rua').value=l.rua||'';
+  drawn.clearLayers(); poligono=null; $('#poli-status').textContent='Nenhum polígono.';
+  if(l.tipo==='poligono' && (l.poligono||[]).length){ poligono=l.poligono;
+    const layer=L.polygon(l.poligono); drawn.addLayer(layer); map.fitBounds(layer.getBounds());
+    $('#poli-status').textContent=`Polígono com ${poligono.length} pontos.`; }
+};
+
+carregaPortais(); carregaSalvas();
+</script>
+</body>
+</html>
