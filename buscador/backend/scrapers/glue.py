@@ -7,12 +7,89 @@ formato "BR>Rio de Janeiro>NULL>Rio de Janeiro>{zona}>{bairro}".
 """
 from __future__ import annotations
 
+import asyncio
+import json
+import re
+import time
 from typing import Optional
 
 import httpx
+from unidecode import unidecode
 
 from models import BuscaParams, Imovel
 from scrapers.base import Scraper
+
+# Cache em memória por anunciante (o total muda pouco; evita rebuscar a cada busca).
+_TOTAL_CACHE: dict[str, int] = {}
+
+
+def _extrair_total(html: str) -> Optional[int]:
+    """Extrai account.listingsCount da página do anúncio. O total REAL de anúncios
+    da imobiliária só aparece aqui (não na API de busca). A ordem das chaves do
+    bloco `account` varia, então localizamos o objeto e o parseamos com raw_decode
+    (robusto) em vez de regex posicional. O payload RSC vem com aspas escapadas."""
+    if "__next_f" in html:
+        html = "".join(
+            json.loads(s) for s in re.findall(r'__next_f\.push\(\[1,\s*(".*?")\]\)', html, re.S)
+        )
+    dec = json.JSONDecoder()
+    i = html.find('"account":{')
+    while i != -1:
+        try:
+            obj, _ = dec.raw_decode(html[i + len('"account":'):])
+            if isinstance(obj, dict) and isinstance(obj.get("listingsCount"), int):
+                return obj["listingsCount"]
+        except Exception:
+            pass
+        i = html.find('"account":{', i + 1)
+    return None
+
+
+def _total_anunciante_sync(url: str) -> Optional[int]:
+    """Abre a página do anúncio e extrai o total da imobiliária.
+
+    ZAP e VivaReal compartilham a base (mesmo listing id e mesmo listingsCount —
+    validado: 845 em ambos), mas o rate-limit é por domínio: o www do ZAP
+    bloqueia (429) com pouquíssimas requisições, o do VivaReal não. Por isso
+    tenta primeiro pelo VivaReal e só cai para o ZAP se precisar."""
+    from curl_cffi import requests as creq
+
+    candidatas = []
+    if "zapimoveis.com.br" in url:
+        candidatas.append(url.replace("www.zapimoveis.com.br", "www.vivareal.com.br"))
+    candidatas.append(url)
+
+    for u in candidatas:
+        try:
+            r = creq.get(u, impersonate="chrome", timeout=30)
+        except Exception:
+            continue
+        if r.status_code == 200:
+            total = _extrair_total(r.text)
+            if total is not None:
+                return total
+        elif r.status_code == 429:
+            time.sleep(1.0)
+    return None
+
+# Mapeia o tipo da Glue para o termo usado no slug da URL do portal.
+_UNIT_SLUG = {
+    "APARTMENT": "apartamento",
+    "PENTHOUSE": "cobertura",
+    "FLAT": "flat",
+    "KITNET": "kitnet",
+    "STUDIO": "kitnet",
+    "HOME": "casa",
+    "CONDOMINIUM": "casa-de-condominio",
+    "FARM": "fazenda-sitio-chacara",
+    "ALLOTMENT_LAND": "lote-terreno",
+}
+
+
+def _slug(texto: Optional[str]) -> str:
+    if not texto:
+        return ""
+    return "-".join(unidecode(texto).lower().split())
 
 GLUE_URL = "https://glue-api.zapimoveis.com.br/v2/listings"
 GLUE_LOCATIONS = "https://glue-api.zapimoveis.com.br/v2/locations"
@@ -113,9 +190,31 @@ class GlueScraper(Scraper):
                     ids.append(lid)
         return ids
 
-    def _to_imovel(self, item: dict) -> Optional[Imovel]:
+    def _montar_url(self, lst: dict, addr: dict, business: str) -> str:
+        """A Glue não devolve o link do anúncio; monta-se o slug canônico do
+        portal: /imovel/{venda|aluguel}-{tipo}-{N}-quartos-{bairro}-{zona}-
+        {cidade}-{uf}-{area}m2-id-{id}/  (o portal resolve pelo id no final)."""
+        _id = lst.get("id")
+        unit = _UNIT_SLUG.get((lst.get("unitTypes") or [None])[0], "imovel")
+        oper = "aluguel" if business == "RENTAL" else "venda"
+        quartos = _primeiro(lst.get("bedrooms"), int)
+        area = _primeiro(lst.get("usableAreas"), int)
+        partes = [oper, unit]
+        if quartos:
+            partes.append(f"{quartos}-quartos")
+        partes += [
+            _slug(addr.get("neighborhood")),
+            _slug(addr.get("zone")),
+            _slug(addr.get("city")),
+            _slug(addr.get("stateAcronym") or "rj"),
+        ]
+        if area:
+            partes.append(f"{area}m2")
+        slug = "-".join(p for p in partes if p)
+        return f"https://{self.dominio}/imovel/{slug}-id-{_id}/"
+
+    def _to_imovel(self, item: dict, business: str) -> Optional[Imovel]:
         lst = item.get("listing") or {}
-        link = item.get("link") or {}
         addr = lst.get("address") or {}
         point = addr.get("point") or {}
         preco = cond = None
@@ -126,15 +225,24 @@ class GlueScraper(Scraper):
                 cond = float(pi["monthlyCondoFee"])
         lat = point.get("lat") or point.get("approximateLat")
         lon = point.get("lon") or point.get("approximateLon")
-        _id = lst.get("id") or item.get("listing", {}).get("id")
+        _id = lst.get("id")
         if not _id:
             return None
-        href = link.get("href") or ""
-        url = f"https://{self.dominio}{href}" if href.startswith("/") else (href or f"https://{self.dominio}")
+        # As fotos ficam no nível do ITEM (item["medias"]), não em listing.medias.
+        fotos = []
+        for m in (item.get("medias") or []):
+            u = m.get("url", "")
+            if u:
+                fotos.append(
+                    u.replace("{description}", "foto")
+                    .replace("{action}", "crop")
+                    .replace("{width}", "870")
+                    .replace("{height}", "653")
+                )
         return Imovel(
             portal=self.nome,
             id=str(_id),
-            url=url,
+            url=self._montar_url(lst, addr, business),
             titulo=(lst.get("title") or "").strip(),
             preco=preco,
             condominio=cond,
@@ -151,13 +259,13 @@ class GlueScraper(Scraper):
             lat=float(lat) if lat not in (None, "") else None,
             lon=float(lon) if lon not in (None, "") else None,
             coord_aproximada=bool(point.get("aproximated", True)),
-            fotos=[m.get("url", "").replace("{action}", "crop").replace("{width}", "600").replace("{height}", "450")
-                   for m in (lst.get("medias") or []) if m.get("url")][:3],
+            fotos=fotos[:3],
         )
 
     async def buscar(self, params: BuscaParams, client: httpx.AsyncClient) -> list[Imovel]:
         headers = {"User-Agent": UA, "Accept": "application/json", "x-domain": self.dominio}
         size = 24  # teto da Glue API ("Size is above acceptable limit" acima disso)
+        business = "RENTAL" if params.operacao == "aluguel" else "SALE"
         loc = params.localizacao
 
         if loc.tipo == "rua" and loc.rua:
@@ -185,10 +293,100 @@ class GlueScraper(Scraper):
                 if not listings:
                     break
                 for it in listings:
-                    im = self._to_imovel(it)
+                    im = self._to_imovel(it, business)
                     if im:
                         out.append(im)
                 frm += size
                 if len(listings) < size:
                     break
         return out
+
+    async def imobiliarias(self, params: BuscaParams, client: httpx.AsyncClient) -> list[dict]:
+        """Agrupa os anúncios do portal por anunciante (imobiliária/corretor).
+        Para cada um: nome, contato (telefone), CRECI, logo, 1 anúncio de exemplo e
+        a contagem de anúncios DENTRO da amostra coletada (não o total do portal —
+        a Glue API não permite filtrar/contar por anunciante)."""
+        headers = {"User-Agent": UA, "Accept": "application/json", "x-domain": self.dominio}
+        size = 24
+        business = "RENTAL" if params.operacao == "aluguel" else "SALE"
+        alvo = params.limite_por_portal
+        agg: dict[str, dict] = {}
+        coletados = 0
+        for loc_id in self._locs(params.localizacao):
+            frm = 0
+            while coletados < alvo:
+                q = self._params_base(params, loc_id, size, frm)
+                r = await client.get(GLUE_URL, params=q, headers=headers, timeout=30)
+                r.raise_for_status()
+                listings = r.json().get("search", {}).get("result", {}).get("listings", [])
+                if not listings:
+                    break
+                for it in listings:
+                    coletados += 1
+                    acc = it.get("account") or {}
+                    aid = acc.get("id")
+                    if not aid:
+                        continue
+                    if aid not in agg:
+                        phones = acc.get("phones") or {}
+                        logo = acc.get("logoUrl") or ""
+                        im = self._to_imovel(it, business)
+                        # legacyVivarealId = id da página da imobiliária no portal
+                        # (/imobiliaria/{id}/), onde o ZAP mostra o total real.
+                        legacy = acc.get("legacyVivarealId") or 0
+                        agg[aid] = {
+                            "id": aid,
+                            "nome": acc.get("name") or "(sem nome)",
+                            "contato": phones.get("primary") or phones.get("mobile") or "",
+                            "creci": acc.get("licenseNumber") or "",
+                            "tier": acc.get("tier") or "",
+                            "logo": logo.replace("{description}", "logo").replace("{action}", "fit")
+                                        .replace("{width}", "120").replace("{height}", "120") if logo else "",
+                            "anuncio": im.model_dump() if im else None,
+                            "legacy_id": legacy,
+                            "agencia_url": f"https://{self.dominio}/imobiliaria/{legacy}/" if legacy else "",
+                            "qtd_amostra": 0,
+                        }
+                    agg[aid]["qtd_amostra"] += 1
+                frm += size
+                if len(listings) < size:
+                    break
+        imobs = list(agg.values())
+        # Enriquece TODAS com o total real durante a busca (via VivaReal, que não
+        # tem o rate-limit agressivo do ZAP; cache evita refazer nas próximas).
+        await self._enriquecer_totais(imobs)
+        return sorted(
+            imobs, key=lambda x: (x.get("total_portal") or 0, x["qtd_amostra"]), reverse=True
+        )
+
+    async def _enriquecer_totais(self, imobs: list[dict]) -> None:
+        """Busca o total real (listingsCount) de cada imobiliária em paralelo
+        controlado. Fonte: página do anúncio no VivaReal (mesma base do ZAP)."""
+        sem = asyncio.Semaphore(6)
+
+        async def um(item: dict) -> None:
+            aid = item["id"]
+            if aid in _TOTAL_CACHE:
+                item["total_portal"] = _TOTAL_CACHE[aid]
+                return
+            url = (item.get("anuncio") or {}).get("url")
+            if not url:
+                return
+            async with sem:
+                total = await asyncio.to_thread(_total_anunciante_sync, url)
+            if total is not None:
+                _TOTAL_CACHE[aid] = total
+                item["total_portal"] = total
+
+        await asyncio.gather(*(um(it) for it in imobs))
+
+
+async def total_anunciante(advertiser_id: str, url: str) -> Optional[int]:
+    """Total real de anúncios de uma imobiliária (listingsCount), sob demanda.
+    Usa cache por anunciante; 1 requisição por imobiliária, evitando rajada."""
+    if advertiser_id in _TOTAL_CACHE:
+        return _TOTAL_CACHE[advertiser_id]
+    total = await asyncio.to_thread(_total_anunciante_sync, url)
+    if total is not None and advertiser_id:
+        _TOTAL_CACHE[advertiser_id] = total
+    return total

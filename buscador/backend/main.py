@@ -131,6 +131,38 @@ async def buscar(params: BuscaParams):
     )
 
 
+@app.post("/api/imobiliarias")
+async def imobiliarias(params: BuscaParams):
+    """Levanta imobiliárias/corretores no ZAP agrupando a amostra por anunciante."""
+    zap = get_scraper("zap")
+    async with httpx.AsyncClient() as client:
+        try:
+            dados = await zap.imobiliarias(params, client)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(502, f"Falha ao consultar o ZAP: {type(e).__name__}")
+    return {
+        "total_imobiliarias": len(dados),
+        "amostra": params.limite_por_portal,
+        "imobiliarias": dados,
+    }
+
+
+class PedidoTotal(BaseModel):
+    id: str
+    url: str
+
+
+@app.post("/api/imobiliaria-total")
+async def imobiliaria_total(p: PedidoTotal):
+    """Total real de anúncios de UMA imobiliária no ZAP (sob demanda, 1 requisição)."""
+    from scrapers.glue import total_anunciante
+
+    total = await total_anunciante(p.id, p.url)
+    if total is None:
+        raise HTTPException(503, "Não foi possível obter agora (ZAP pode estar limitando). Tente de novo em instantes.")
+    return {"id": p.id, "total_portal": total}
+
+
 # ------------------------------------------------- buscas salvas (CRUD)
 @app.get("/api/buscas")
 def listar_buscas():
@@ -140,11 +172,12 @@ def listar_buscas():
 class NovaBusca(BaseModel):
     nome: str
     params: BuscaParams
+    imoveis: list[Imovel] = []  # snapshot dos resultados exibidos ao salvar
 
 
 @app.post("/api/buscas")
 def criar_busca(nb: NovaBusca):
-    return db.salvar_busca(nb.nome, nb.params)
+    return db.salvar_busca(nb.nome, nb.params, nb.imoveis)
 
 
 @app.delete("/api/buscas/{bid}")
@@ -157,7 +190,11 @@ def apagar_busca(bid: int):
 # ------------------------------------------------- frontend estático
 @app.get("/")
 def index():
-    return FileResponse(FRONTEND / "index.html")
+    # no-store: garante que o navegador sempre carregue a versão mais recente da UI.
+    return FileResponse(
+        FRONTEND / "index.html",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
 
 
 if FRONTEND.exists():

@@ -72,4 +72,7 @@ class BuscaSalva(BaseModel):
     id: Optional[int] = None
     nome: str
     params: BuscaParams
+    # Snapshot dos imóveis encontrados no momento em que a busca foi salva.
+    imoveis: list[Imovel] = Field(default_factory=list)
+    total: int = 0
     criado_em: Optional[str] = None

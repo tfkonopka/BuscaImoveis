@@ -11,7 +11,14 @@
           --acc:#6c8cff; --ok:#3ecf8e; --warn:#ffb020; }
   * { box-sizing:border-box; }
   body { margin:0; font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg);
-         color:var(--fg); display:grid; grid-template-columns:340px 1fr; height:100vh; }
+         color:var(--fg); display:flex; flex-direction:column; height:100vh; }
+  .tabs { display:flex; gap:2px; background:#11162a; border-bottom:1px solid var(--line); flex:0 0 auto; }
+  .tabs button { background:none; border:none; color:var(--mut); padding:10px 18px; font-size:14px;
+    font-weight:600; cursor:pointer; border-bottom:2px solid transparent; }
+  .tabs button.on { color:var(--fg); border-bottom-color:var(--acc); }
+  .panel { flex:1; min-height:0; }
+  #tab-buscar { display:grid; grid-template-columns:340px 1fr; }
+  #tab-imob { overflow:auto; padding:18px; }
   h1 { font-size:16px; margin:0 0 4px; } h2 { font-size:13px; margin:18px 0 8px; color:var(--mut);
        text-transform:uppercase; letter-spacing:.5px; }
   aside { background:var(--panel); border-right:1px solid var(--line); overflow:auto; padding:16px; }
@@ -35,7 +42,34 @@
   th,td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
   th { color:var(--mut); position:sticky; top:0; background:var(--panel); }
   tr:hover td { background:#222845; cursor:pointer; }
+  tr.sel td { background:#4a1d22; box-shadow:inset 3px 0 0 #e23b3b; }
+  tr.sel:hover td { background:#5a2228; }
+  .pin { background:none; border:none; }
+  .imob-form { display:flex; flex-direction:column; gap:10px; max-width:640px; }
+  .imob-campos { display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:end; }
+  .imob-campos > div { min-width:0; }
+  .imob-campos .primary { grid-column:1 / -1; margin-top:2px; }
+  .imob-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(310px,1fr)); gap:12px; margin-top:12px; }
+  .imob-card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px; display:flex; gap:12px; }
+  .imob-card img { width:54px; height:54px; border-radius:8px; object-fit:contain; background:#fff; flex:0 0 auto; }
+  .imob-card .corpo { min-width:0; flex:1; }
+  .imob-card .topo { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
+  .imob-card .nome { font-weight:600; }
+  .imob-card .qtd { background:var(--acc); color:#fff; border-radius:20px; padding:1px 9px; font-size:12px; font-weight:600; white-space:nowrap; }
+  .imob-card .linha { font-size:12px; color:var(--mut); margin-top:3px; }
+  .imob-card a { color:var(--acc); text-decoration:none; }
+  .imob-card .wa { color:var(--ok); }
   .pill { font-size:11px; padding:1px 7px; border-radius:20px; background:#243; color:var(--ok); }
+  .results-top { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; }
+  .colpicker { position:relative; flex:0 0 auto; }
+  #cols-menu { position:absolute; right:0; top:28px; z-index:1000; background:var(--panel);
+    border:1px solid var(--line); border-radius:10px; padding:8px; min-width:180px;
+    box-shadow:0 8px 24px rgba(0,0,0,.4); }
+  #cols-menu .chk { font-size:13px; margin:2px 0; }
+  .tabela-wrap { overflow-x:auto; }
+  th.sortable { cursor:pointer; user-select:none; }
+  th.sortable:hover { color:var(--fg); }
+  th .arrow { color:var(--acc); }
   .saved { display:flex; justify-content:space-between; align-items:center; gap:6px;
            background:#11162a; border:1px solid var(--line); border-radius:8px; padding:6px 8px; margin:5px 0; }
   .saved b { font-weight:600; } .saved small { color:var(--mut); }
@@ -45,6 +79,12 @@
 </style>
 </head>
 <body>
+<nav class="tabs">
+  <button class="on" data-tab="buscar">🔎 Buscar imóveis</button>
+  <button data-tab="imob">🏢 Imobiliárias (ZAP)</button>
+</nav>
+
+<div id="tab-buscar" class="panel">
 <aside>
   <h1>🏠 Buscador de Imóveis</h1>
   <div class="muted">Rio de Janeiro · foco Zona Sul</div>
@@ -87,6 +127,13 @@
     <button class="ghost mini" id="limpa-poli">Limpar polígono</button>
   </div>
 
+  <label>Máx. de imóveis por portal</label>
+  <input id="limite" type="number" min="10" max="2000" step="10" value="100">
+  <div class="muted" style="font-size:11px;margin-top:3px">
+    Teto de anúncios baixados de cada portal. Maior = mais completo, porém mais lento.
+    O portal pode ter milhares; isto define quantos o app puxa.
+  </div>
+
   <button class="primary" id="buscar">🔎 Buscar agora</button>
 
   <h2>Buscas salvas</h2>
@@ -101,18 +148,62 @@
   <div id="map"></div>
   <div class="results">
     <div id="avisos"></div>
-    <div id="resumo" class="muted">Configure os filtros e clique em <b>Buscar agora</b>.</div>
-    <table><thead><tr>
-      <th>Portal</th><th>Bairro</th><th>Rua</th><th>Quartos</th><th>Vagas</th><th>Área</th><th>Preço</th><th></th>
-    </tr></thead><tbody id="linhas"></tbody></table>
+    <div class="results-top">
+      <div id="resumo" class="muted">Configure os filtros e clique em <b>Buscar agora</b>.</div>
+      <div class="colpicker">
+        <button id="btn-cols" class="ghost mini" type="button">⚙ Colunas ▾</button>
+        <div id="cols-menu" hidden></div>
+      </div>
+    </div>
+    <div class="tabela-wrap">
+      <table><thead id="cabecalho"></thead><tbody id="linhas"></tbody></table>
+    </div>
   </div>
 </main>
+</div><!-- /tab-buscar -->
+
+<div id="tab-imob" class="panel" hidden>
+  <h1 style="margin:0 0 4px">🏢 Imobiliárias no ZAP Imóveis</h1>
+  <div class="muted" style="margin-bottom:14px">Levanta os anunciantes de uma localização no ZAP: nome, contato, 1 anúncio de exemplo e o total de imóveis no portal.</div>
+  <div class="imob-form">
+    <div class="seg" id="imob-loctipo" style="max-width:260px">
+      <button data-t="zona" class="on">Zona</button><button data-t="bairro">Bairro</button>
+    </div>
+    <div class="imob-campos">
+      <div id="imob-loc-zona"><label>Zona</label>
+        <select id="imob-zona"><option>Zona Sul</option><option>Zona Norte</option><option>Zona Oeste</option><option>Centro</option></select></div>
+      <div id="imob-loc-bairro" hidden><label>Bairros (vírgula)</label>
+        <input id="imob-bairros" placeholder="Copacabana, Ipanema"></div>
+      <div><label>Operação</label>
+        <select id="imob-operacao"><option value="venda">Venda</option><option value="aluguel">Aluguel</option></select></div>
+      <div><label>Amostra (máx. anúncios)</label>
+        <input id="imob-limite" type="number" min="24" max="2000" step="24" value="240"></div>
+      <div><label>Anúncios no portal (mín)</label>
+        <input id="imob-tmin" type="number" min="0" placeholder="—"></div>
+      <div><label>Anúncios no portal (máx)</label>
+        <input id="imob-tmax" type="number" min="0" placeholder="—"></div>
+      <button class="primary" id="imob-buscar" style="margin-top:0">🔎 Levantar imobiliárias</button>
+    </div>
+  </div>
+  <div class="aviso" style="margin:10px 0">ℹ️ Cada imobiliária aparece uma única vez, com <b>1 anúncio de exemplo</b> e o <b>total real de imóveis no portal</b> (levantado durante a busca — por isso ela demora um pouco mais).</div>
+  <div id="imob-resumo" class="muted"></div>
+  <div id="imob-result" class="imob-grid"></div>
+</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 let poligono = null, markers = L.layerGroup();
+const markerPorId = {};            // id do imóvel -> marcador no mapa
+const selecionados = new Set();    // ids dos imóveis selecionados (multisseleção)
+
+// Pinos SVG (sem depender de imagem externa): azul = normal, vermelho = selecionado.
+const pino = cor => L.divIcon({ className:'pin', iconSize:[26,38], iconAnchor:[13,37], popupAnchor:[0,-32],
+  html:`<svg width="26" height="38" viewBox="0 0 26 38" xmlns="http://www.w3.org/2000/svg">
+    <path d="M13 0C5.8 0 0 5.8 0 13c0 9.7 13 25 13 25s13-15.3 13-25C26 5.8 20.2 0 13 0z" fill="${cor}" stroke="#fff" stroke-width="2"/>
+    <circle cx="13" cy="13" r="4.5" fill="#fff"/></svg>` });
+const iconeAzul = pino('#2a72e8'), iconeVermelho = pino('#e23b3b');
 
 // ---- mapa ----
 const map = L.map('map').setView([-22.97, -43.19], 13);
@@ -165,7 +256,8 @@ function coletaParams(){
     quartos_min:num('#qmin'), quartos_max:num('#qmax'),
     area_min:num('#amin'), area_max:num('#amax'),
     vagas:num('#vagas'),
-    localizacao:loc, limite_por_portal:100
+    localizacao:loc,
+    limite_por_portal: Math.min(Math.max(num('#limite')||100, 10), 2000)
   };
 }
 
@@ -184,38 +276,123 @@ $('#buscar').onclick = async () => {
 };
 
 function fmt(n){ return n==null?'—':n.toLocaleString('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0}); }
+// ---- colunas configuráveis + ordenação ----
+const COLS = [
+  {k:'portal',     label:'Portal',     type:'text', get:im=>im.portal,     render:im=>`<span class="pill">${im.portal}</span>`},
+  {k:'bairro',     label:'Bairro',     type:'text', get:im=>im.bairro},
+  {k:'rua',        label:'Rua',        type:'text', get:im=>im.rua},
+  {k:'quartos',    label:'Quartos',    type:'num',  get:im=>im.quartos},
+  {k:'banheiros',  label:'Banheiros',  type:'num',  get:im=>im.banheiros},
+  {k:'vagas',      label:'Vagas',      type:'num',  get:im=>im.vagas},
+  {k:'area',       label:'Área (m²)',  type:'num',  get:im=>im.area,       render:im=>im.area?im.area+' m²':'—'},
+  {k:'preco',      label:'Preço',      type:'num',  get:im=>im.preco,      render:im=>fmt(im.preco)},
+  {k:'condominio', label:'Condomínio', type:'num',  get:im=>im.condominio, render:im=>fmt(im.condominio)},
+  {k:'preco_m2',   label:'R$/m²',      type:'num',  get:im=>(im.preco&&im.area)?im.preco/im.area:null,
+                   render:im=>{const v=(im.preco&&im.area)?Math.round(im.preco/im.area):null; return v?fmt(v):'—';}},
+];
+const COLS_PADRAO = ['portal','bairro','rua','quartos','vagas','area','preco','preco_m2'];
+let visiveis = new Set(JSON.parse(localStorage.getItem('cols')||'null') || COLS_PADRAO);
+let sort = { k:null, dir:1 };
+const salvarCols = () => localStorage.setItem('cols', JSON.stringify([...visiveis]));
+// Migração única: garante a coluna R$/m² mesmo para quem já tinha seleção salva.
+if(localStorage.getItem('cols_ver') !== 'v2'){ visiveis.add('preco_m2'); salvarCols(); localStorage.setItem('cols_ver','v2'); }
+
+function montarMenuCols(){
+  $('#cols-menu').innerHTML = COLS.map(c=>
+    `<label class="chk"><input type="checkbox" data-k="${c.k}" ${visiveis.has(c.k)?'checked':''}> ${c.label}</label>`
+  ).join('');
+}
+$('#btn-cols').onclick = e => { e.stopPropagation(); const m=$('#cols-menu'); m.hidden=!m.hidden; };
+document.addEventListener('click', e => { if(!e.target.closest('.colpicker')) $('#cols-menu').hidden=true; });
+$('#cols-menu').onchange = e => {
+  const k=e.target.dataset.k; if(!k) return;
+  if(e.target.checked) visiveis.add(k);
+  else if(visiveis.size>1) visiveis.delete(k);
+  else { e.target.checked=true; return; }   // mantém ao menos 1 coluna
+  salvarCols(); renderTabela();
+};
+
+function cmp(va,vb,type,dir){
+  const na=va==null||va===''; const nb=vb==null||vb==='';
+  if(na&&nb) return 0; if(na) return 1; if(nb) return -1;   // nulos sempre no fim
+  const base = type==='num' ? (va-vb) : String(va).localeCompare(String(vb),'pt-BR');
+  return base*dir;
+}
+function renderTabela(){
+  const cols = COLS.filter(c=>visiveis.has(c.k));
+  $('#cabecalho').innerHTML = '<tr>' + cols.map(c=>{
+    const ar = sort.k===c.k ? `<span class="arrow">${sort.dir>0?'▲':'▼'}</span>` : '';
+    return `<th class="sortable" data-k="${c.k}">${c.label} ${ar}</th>`;
+  }).join('') + '<th></th></tr>';
+  let dados = (window._ult||[]).slice();
+  if(sort.k){ const col=COLS.find(c=>c.k===sort.k);
+    dados.sort((a,b)=>cmp(col.get(a),col.get(b),col.type,sort.dir)); }
+  $('#linhas').innerHTML = dados.map(im=>
+    `<tr data-id="${im.id}" class="${selecionados.has(String(im.id))?'sel':''}">${cols.map(c=>`<td>${c.render?c.render(im):(c.get(im)??'—')}</td>`).join('')}`+
+    `<td><a href="${im.url}" target="_blank" rel="noopener">abrir ↗</a></td></tr>`
+  ).join('') || `<tr><td class="muted">Nenhum imóvel. Clique em <b>Buscar agora</b>.</td></tr>`;
+}
+$('#cabecalho').onclick = e => {
+  const th=e.target.closest('th[data-k]'); if(!th) return;
+  const k=th.dataset.k;
+  if(sort.k===k) sort.dir=-sort.dir; else { sort.k=k; sort.dir=1; }
+  renderTabela();
+};
+
 function renderResultados(d){
   (d.avisos||[]).forEach(a=> $('#avisos').innerHTML += `<div class="aviso">⚠️ ${a}</div>`);
-  const pp = Object.entries(d.por_portal||{}).map(([k,v])=>`${k}: ${v}`).join(' · ');
-  $('#resumo').innerHTML = `<b>${d.total}</b> imóveis após filtros <span class="muted">(coletados — ${pp||'0'})</span>`;
-  markers.clearLayers();
-  $('#linhas').innerHTML = (d.imoveis||[]).map((im,i)=>`
-    <tr data-i="${i}">
-      <td><span class="pill">${im.portal}</span></td>
-      <td>${im.bairro||'—'}</td><td>${im.rua||'—'}</td>
-      <td>${im.quartos??'—'}</td><td>${im.vagas??'—'}</td>
-      <td>${im.area?im.area+' m²':'—'}</td><td>${fmt(im.preco)}</td>
-      <td><a href="${im.url}" target="_blank" rel="noopener">abrir ↗</a></td>
-    </tr>`).join('') || `<tr><td colspan="8" class="muted">Nenhum imóvel encontrado.</td></tr>`;
-  (d.imoveis||[]).forEach(im=>{
-    if(im.lat && im.lon) markers.addLayer(
-      L.marker([im.lat,im.lon]).bindPopup(`<b>${im.bairro}</b> — ${im.rua||''}<br>${im.quartos||'?'} qto · ${im.vagas??'?'} vg · ${im.area||'?'}m²<br>${fmt(im.preco)}<br><a href="${im.url}" target="_blank">ver anúncio</a>`));
-  });
+  // distribuição FINAL por portal (pós-filtros e dedupe) — soma = total
+  const finalPorPortal = {};
+  (d.imoveis||[]).forEach(im => finalPorPortal[im.portal] = (finalPorPortal[im.portal]||0)+1);
+  const fp = Object.entries(finalPorPortal).map(([k,v])=>`${k}: ${v}`).join(' · ');
+  const brutos = Object.values(d.por_portal||{}).reduce((a,b)=>a+b,0);
+  $('#resumo').innerHTML = `<b>${d.total}</b> imóveis · ${fp||'—'} `
+    + `<span class="muted">(de ${brutos} coletados, antes de filtros e deduplicação)</span>`;
   window._ult = d.imoveis||[];
+  selecionados.clear();                       // nova busca zera a seleção
+  Object.keys(markerPorId).forEach(k=>delete markerPorId[k]);
+  renderTabela();
+  markers.clearLayers();
+  (window._ult).forEach(im=>{
+    if(im.lat && im.lon){
+      const m = L.marker([im.lat,im.lon], {icon: iconeAzul}).bindPopup(
+        `<b>${im.bairro}</b> — ${im.rua||''}<br>${im.quartos||'?'} qto · ${im.vagas??'?'} vg · ${im.area||'?'}m²<br>${fmt(im.preco)}<br><a href="${im.url}" target="_blank">ver anúncio</a>`);
+      m.on('click', ()=> alternarSelecao(String(im.id)));   // clicar no pino também seleciona
+      markerPorId[String(im.id)] = m;
+      markers.addLayer(m);
+    }
+  });
+}
+
+// Alterna a seleção de um imóvel: pino azul<->vermelho + destaque na linha.
+function alternarSelecao(id){
+  const m = markerPorId[id];
+  const linha = document.querySelector(`#linhas tr[data-id="${id}"]`);
+  if(selecionados.has(id)){
+    selecionados.delete(id);
+    if(linha) linha.classList.remove('sel');
+    if(m){ m.setIcon(iconeAzul); m.setZIndexOffset(0); }
+  } else {
+    selecionados.add(id);
+    if(linha) linha.classList.add('sel');
+    if(m){ m.setIcon(iconeVermelho); m.setZIndexOffset(1000); map.panTo(m.getLatLng()); m.openPopup(); }
+  }
 }
 $('#linhas').onclick = e => {
-  const tr=e.target.closest('tr[data-i]'); if(!tr) return;
-  const im=window._ult[+tr.dataset.i]; if(im&&im.lat&&im.lon) map.setView([im.lat,im.lon],17);
+  if(e.target.closest('a')) return;           // deixa o link "abrir ↗" funcionar
+  const tr=e.target.closest('tr[data-id]'); if(!tr) return;
+  alternarSelecao(tr.dataset.id);
 };
+montarMenuCols(); renderTabela();
 
 // ---- buscas salvas ----
 async function carregaSalvas(){
   const lst = await (await fetch('/api/buscas')).json();
   $('#salvas').innerHTML = lst.map(b=>`
     <div class="saved">
-      <div><b>${b.nome}</b><br><small>${b.criado_em||''}</small></div>
+      <div><b>${b.nome}</b><br><small>${b.criado_em||''} · ${b.total||0} imóveis salvos</small></div>
       <div class="row" style="flex:0 0 auto;gap:4px">
-        <button class="ghost mini" onclick="carregarBusca(${b.id})">Usar</button>
+        <button class="ghost mini" onclick="carregarBusca(${b.id})">Abrir</button>
         <button class="ghost mini" onclick="apagarBusca(${b.id})">✕</button>
       </div>
     </div>`).join('') || '<div class="muted">Nenhuma busca salva ainda.</div>';
@@ -223,8 +400,10 @@ async function carregaSalvas(){
 }
 $('#salvar').onclick = async () => {
   const nome = $('#nome-busca').value.trim(); if(!nome){ alert('Dê um nome à busca.'); return; }
+  const imoveis = window._ult || [];
+  if(imoveis.length===0 && !confirm('Nenhum resultado para salvar ainda. Salvar só os parâmetros da busca?')) return;
   await fetch('/api/buscas',{method:'POST',headers:{'content-type':'application/json'},
-    body:JSON.stringify({nome, params:coletaParams()})});
+    body:JSON.stringify({nome, params:coletaParams(), imoveis})});
   $('#nome-busca').value=''; carregaSalvas();
 };
 window.apagarBusca = async id => { await fetch('/api/buscas/'+id,{method:'DELETE'}); carregaSalvas(); };
@@ -241,8 +420,83 @@ window.carregarBusca = id => {
   if(l.tipo==='poligono' && (l.poligono||[]).length){ poligono=l.poligono;
     const layer=L.polygon(l.poligono); drawn.addLayer(layer); map.fitBounds(layer.getBounds());
     $('#poli-status').textContent=`Polígono com ${poligono.length} pontos.`; }
+  // Exibe o snapshot salvo dos imóveis (sem re-buscar).
+  $('#avisos').innerHTML='';
+  const nota = `Mostrando ${(b.imoveis||[]).length} imóveis salvos em ${b.criado_em||''}. `
+             + `Clique em <b>🔎 Buscar agora</b> para atualizar com anúncios atuais.`;
+  renderResultados({total:(b.imoveis||[]).length, por_portal:{}, avisos:[nota], imoveis:b.imoveis||[]});
 };
 
+// ---- troca de abas ----
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on', x===b));
+  const alvo=b.dataset.tab;
+  $('#tab-buscar').hidden = alvo!=='buscar';
+  $('#tab-imob').hidden   = alvo!=='imob';
+  if(alvo==='buscar') setTimeout(()=>map.invalidateSize(), 60); // Leaflet recalcula ao reexibir
+});
+
+// ---- aba Imobiliárias ----
+document.querySelectorAll('#imob-loctipo button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#imob-loctipo button').forEach(x=>x.classList.toggle('on', x===b));
+  const t=b.dataset.t;
+  $('#imob-loc-zona').hidden = t!=='zona';
+  $('#imob-loc-bairro').hidden = t!=='bairro';
+});
+function fmtTel(t){
+  const d=(t||'').replace(/\D/g,'');
+  if(d.length===11) return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+  if(d.length===10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+  return t||'—';
+}
+$('#imob-buscar').onclick = async () => {
+  const btn=$('#imob-buscar'); btn.disabled=true; btn.textContent='Levantando…';
+  $('#imob-result').innerHTML=''; $('#imob-resumo').textContent='Consultando o ZAP…';
+  try{
+    const t = document.querySelector('#imob-loctipo button.on').dataset.t;
+    const loc = { tipo:t, zona:$('#imob-zona').value, bairros:[], rua:null, poligono:[] };
+    if(t==='bairro') loc.bairros = $('#imob-bairros').value.split(',').map(s=>s.trim()).filter(Boolean);
+    const params = { portais:['zap'], operacao:$('#imob-operacao').value, localizacao:loc,
+      limite_por_portal: Math.min(Math.max(Number($('#imob-limite').value)||240,24),2000) };
+    const r = await fetch('/api/imobiliarias',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(params)});
+    window._ultImob = await r.json();
+    renderImob(window._ultImob);
+  }catch(e){ $('#imob-resumo').textContent='Erro: '+e; }
+  finally{ btn.disabled=false; btn.textContent='🔎 Levantar imobiliárias'; }
+};
+// re-filtra na hora, sem refazer a busca
+$('#imob-tmin').oninput = $('#imob-tmax').oninput = () => { if(window._ultImob) renderImob(window._ultImob); };
+function renderImob(d){
+  const tmin = $('#imob-tmin').value.trim()===''?null:Number($('#imob-tmin').value);
+  const tmax = $('#imob-tmax').value.trim()===''?null:Number($('#imob-tmax').value);
+  const todos = d.imobiliarias||[];
+  const lista = todos.filter(im=>{
+    if(tmin===null && tmax===null) return true;
+    if(im.total_portal==null) return false;        // sem total não dá pra comparar
+    if(tmin!==null && im.total_portal<tmin) return false;
+    if(tmax!==null && im.total_portal>tmax) return false;
+    return true;
+  });
+  const filtroTxt = (tmin!==null||tmax!==null) ? ` · <b>${lista.length}</b> após filtro (${tmin??'0'}–${tmax??'∞'} anúncios)` : '';
+  $('#imob-resumo').innerHTML = `<b>${d.total_imobiliarias}</b> imobiliárias encontradas${filtroTxt} · ordenadas pelo total de imóveis no portal.`;
+  $('#imob-result').innerHTML = lista.map(im=>{
+    const an=im.anuncio||{}; const dig=(im.contato||'').replace(/\D/g,'');
+    const wa = dig.length===11 ? ` · <a class="wa" href="https://wa.me/55${dig}" target="_blank" rel="noopener">WhatsApp</a>` : '';
+    const logo = im.logo ? `<img src="${im.logo}" alt="" onerror="this.remove()">` : '';
+    const badge = im.total_portal != null
+      ? `<span class="qtd">${im.total_portal.toLocaleString('pt-BR')} imóveis</span>`
+      : `<span class="qtd" style="background:var(--line)">total indisponível</span>`;
+    const agencia = im.agencia_url
+      ? `<div class="linha"><a href="${im.agencia_url}" target="_blank" rel="noopener">🔗 ver imóveis no ZAP ↗</a></div>` : '';
+    return `<div class="imob-card">${logo}<div class="corpo">
+      <div class="topo"><span class="nome">${im.nome}</span>${badge}</div>
+      ${agencia}
+      <div class="linha">${im.creci?('CRECI '+im.creci):'CRECI não informado'}${im.tier?' · '+im.tier:''}</div>
+      <div class="linha">📞 ${fmtTel(im.contato)}${wa}</div>
+      <div class="linha">Ex.: ${an.bairro||''}${an.area?' · '+an.area+'m²':''}${an.preco?' · '+fmt(an.preco):''}${an.url?` · <a href="${an.url}" target="_blank" rel="noopener">ver anúncio ↗</a>`:''}</div>
+    </div></div>`;
+  }).join('') || '<div class="muted">Nenhuma imobiliária encontrada.</div>';
+}
 carregaPortais(); carregaSalvas();
 </script>
 </body>

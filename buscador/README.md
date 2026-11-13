@@ -10,16 +10,26 @@ demanda** (só roda quando você clica) e **buscas salvas** para repetir depois.
 
 ## Portais
 
-| Portal | Status | Método |
-|---|---|---|
-| ZAP Imóveis | ✅ funcional | API interna (Glue API) |
-| VivaReal | ✅ funcional | API interna (mesma Glue API) |
-| OLX Imóveis | 🔧 conector a implementar | — |
-| QuintoAndar | 🔧 conector a implementar | — |
-| Imovelweb | 🔧 conector a implementar | — |
+| Portal | Status | Método | Rua? | Mapa/polígono? |
+|---|---|---|---|---|
+| ZAP Imóveis | ✅ funcional | API interna (Glue API) | sim | sim (coord. aprox.) |
+| VivaReal | ✅ funcional | API interna (mesma Glue API) | sim | sim (coord. aprox.) |
+| OLX Imóveis | ✅ funcional | HTML (RSC Next.js) via curl_cffi | não | não |
+| QuintoAndar | ✅ funcional | HTML (`__NEXT_DATA__`) | sim | não |
+| Imovelweb | ✅ funcional | HTML (`__PRELOADED_STATE__`) via curl_cffi | sim | não |
 
-Os 3 conectores pendentes já aparecem na interface (como "em breve") e têm a
-interface pronta em `backend/scrapers/` — basta implementar o método `buscar`.
+**Anti-bot:** OLX e Imovelweb usam DataDome e bloqueiam requisições comuns (403).
+Por isso usamos **`curl_cffi`** (impersona o TLS do Chrome) nesses dois. ZAP/VivaReal
+usam a Glue API (JSON) e QuintoAndar renderiza no servidor (basta `httpx`).
+
+**Diferenças por portal:**
+- OLX não expõe **rua** nem **coordenadas** na listagem → não entra nos modos
+  *rua* e *polígono*.
+- QuintoAndar e Imovelweb trazem **rua** (modo *rua* funciona), mas sem coordenadas
+  (não entram no *polígono*).
+- QuintoAndar traz ~24 imóveis por bairro (1ª página); na busca por *zona* iteramos
+  os bairros da Zona Sul para somar mais resultados.
+- Só ZAP/VivaReal têm coordenadas → o filtro por **polígono** só se aplica a eles.
 
 ## Como rodar
 
@@ -46,6 +56,18 @@ Depois abra <http://127.0.0.1:8777> no navegador.
    - **Polígono** — desenhe a área no mapa com a ferramenta ▱.
 4. Clique em **🔎 Buscar agora**.
 5. Opcional: dê um nome e **Salve a busca** para repetir depois.
+
+## Aba "Imobiliárias" (só ZAP)
+
+Levanta os anunciantes de uma localização no ZAP e mostra, por imobiliária:
+**nome, contato (telefone + WhatsApp), CRECI, 1 anúncio de exemplo** e **quantos
+anúncios dela aparecem na amostra** coletada.
+
+> A contagem é feita sobre a amostra baixada (o ZAP não permite filtrar/contar por
+> anunciante, nem expõe facetas). Aumente a amostra para se aproximar do total na
+> região. Nome, contato e anúncio de exemplo são exatos.
+
+Endpoint: `POST /api/imobiliarias` (mesma forma de `BuscaParams`, mas só ZAP).
 
 ## Arquitetura
 

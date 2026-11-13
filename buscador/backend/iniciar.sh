@@ -9,4 +9,4 @@ if [ ! -d .deps ]; then
 fi
 
 echo "🚀 Buscador em http://127.0.0.1:8777  (Ctrl+C para parar)"
-PYTHONPATH=.deps .deps/bin/uvicorn main:app --host 127.0.0.1 --port 8777
+PYTHONPATH=.deps python3 -m uvicorn main:app --host 127.0.0.1 --port 8777
