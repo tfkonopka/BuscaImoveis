@@ -10,6 +10,7 @@
   :root { --bg:#0f1220; --panel:#1a1f35; --line:#2a3152; --fg:#e8ecf7; --mut:#9aa6c7;
           --acc:#6c8cff; --ok:#3ecf8e; --warn:#ffb020; }
   * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
   body { margin:0; font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg);
          color:var(--fg); display:flex; flex-direction:column; height:100vh; }
   .tabs { display:flex; gap:2px; background:#11162a; border-bottom:1px solid var(--line); flex:0 0 auto; }
@@ -17,13 +18,13 @@
     font-weight:600; cursor:pointer; border-bottom:2px solid transparent; }
   .tabs button.on { color:var(--fg); border-bottom-color:var(--acc); }
   .panel { flex:1; min-height:0; }
-  #tab-buscar { display:grid; grid-template-columns:340px 1fr; }
+  #tab-buscar, #tab-itbi { display:grid; grid-template-columns:340px 1fr; }
   #tab-imob { overflow:auto; padding:18px; }
   h1 { font-size:16px; margin:0 0 4px; } h2 { font-size:13px; margin:18px 0 8px; color:var(--mut);
        text-transform:uppercase; letter-spacing:.5px; }
   aside { background:var(--panel); border-right:1px solid var(--line); overflow:auto; padding:16px; }
   main { display:grid; grid-template-rows:1fr 320px; min-width:0; }
-  #map { width:100%; height:100%; }
+  #map, #it-map { width:100%; height:100%; }
   .results { background:var(--panel); border-top:1px solid var(--line); overflow:auto; padding:12px; }
   label { display:block; font-size:12px; color:var(--mut); margin:8px 0 3px; }
   input,select,button { font:inherit; color:var(--fg); background:#11162a; border:1px solid var(--line);
@@ -59,13 +60,34 @@
   .imob-card .linha { font-size:12px; color:var(--mut); margin-top:3px; }
   .imob-card a { color:var(--acc); text-decoration:none; }
   .imob-card .wa { color:var(--ok); }
+  .wa-panel { max-width:900px; margin:14px 0; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 14px; }
+  .wa-panel summary { cursor:pointer; font-weight:600; }
+  .wa-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:8px; }
+  @media (max-width:800px){ .wa-grid { grid-template-columns:1fr; } }
+  .wa-panel textarea { width:100%; min-height:110px; resize:vertical; font:inherit; color:var(--fg); background:#11162a;
+    border:1px solid var(--line); border-radius:8px; padding:8px; }
+  .wa-prev { background:#0d2b21; border:1px solid #1f6b4d; border-radius:8px; padding:8px; font-size:12px; white-space:pre-wrap; margin-top:6px; }
+  .wa-btn { display:inline-block; width:auto; background:var(--ok); border-color:var(--ok); color:#06210f; font-weight:600; padding:4px 10px; font-size:12px; cursor:pointer; }
+  .imob-card.contatada { border-color:#1f6b4d; }
+  .contato-box { margin-top:6px; padding:6px 8px; border-radius:8px; background:#0d2b21; font-size:12px; }
+  .contato-box select, .contato-box input { width:auto; padding:3px 6px; font-size:12px; margin-top:4px; }
+  .contato-box input { width:100%; }
+  .it-tipos { max-height:132px; overflow:auto; border:1px solid var(--line); border-radius:8px; padding:4px 8px; background:#11162a; }
+  .it-tipos .chk { font-size:12px; margin:2px 0; }
+  .it-stats { display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 8px; }
+  .it-stat { background:#11162a; border:1px solid var(--line); border-radius:10px; padding:6px 10px; }
+  .it-stat small { display:block; color:var(--mut); font-size:11px; }
+  .it-stat b { font-size:15px; }
+  .it-anos { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px; }
+  .it-ano { font-size:11px; background:#11162a; border:1px solid var(--line); border-radius:8px; padding:2px 7px; color:var(--mut); }
+  .it-ano b { color:var(--fg); }
   .pill { font-size:11px; padding:1px 7px; border-radius:20px; background:#243; color:var(--ok); }
   .results-top { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; }
   .colpicker { position:relative; flex:0 0 auto; }
-  #cols-menu { position:absolute; right:0; top:28px; z-index:1000; background:var(--panel);
+  #cols-menu, .cols-menu { position:absolute; right:0; top:28px; z-index:1000; background:var(--panel);
     border:1px solid var(--line); border-radius:10px; padding:8px; min-width:180px;
     box-shadow:0 8px 24px rgba(0,0,0,.4); }
-  #cols-menu .chk { font-size:13px; margin:2px 0; }
+  #cols-menu .chk, .cols-menu .chk { font-size:13px; margin:2px 0; }
   .tabela-wrap { overflow-x:auto; }
   th.sortable { cursor:pointer; user-select:none; }
   th.sortable:hover { color:var(--fg); }
@@ -82,6 +104,7 @@
 <nav class="tabs">
   <button class="on" data-tab="buscar">🔎 Buscar imóveis</button>
   <button data-tab="imob">🏢 Imobiliárias (ZAP)</button>
+  <button data-tab="itbi">🧾 ITBI (valores declarados)</button>
 </nav>
 
 <div id="tab-buscar" class="panel">
@@ -185,10 +208,120 @@
       <button class="primary" id="imob-buscar" style="margin-top:0">🔎 Levantar imobiliárias</button>
     </div>
   </div>
+  <details class="wa-panel" open>
+    <summary>💬 WhatsApp — mensagem padrão e controle de contatos</summary>
+    <div class="wa-grid">
+      <div>
+        <label>Enviando como</label>
+        <select id="wa-remetente"></select>
+        <div id="wa-rem-lista"></div>
+        <div class="row" style="margin-top:6px">
+          <input id="wa-rem-nome" placeholder="Nome (ex.: Maria)">
+          <input id="wa-rem-num" placeholder="Seu WhatsApp (DDD+número)">
+          <button class="mini" id="wa-rem-add" style="flex:0 0 auto">+ Adicionar</button>
+        </div>
+        <div class="muted" style="margin-top:6px">O link abre o WhatsApp que estiver <b>logado neste navegador/celular</b>. Antes de enviar, confira se é o da pessoa escolhida em “Enviando como” (o número cadastrado serve só de referência).</div>
+        <label style="margin-top:12px">Filtrar por contato</label>
+        <select id="imob-fcont"></select>
+      </div>
+      <div>
+        <label>Mensagem padrão <span class="muted">— variáveis: {imobiliaria} {bairro} {link_anuncio} {remetente}</span></label>
+        <textarea id="wa-msg"></textarea>
+        <div class="row" style="margin-top:6px"><button class="mini" id="wa-msg-salvar">💾 Salvar mensagem</button><span id="wa-status" class="muted" style="align-self:center"></span></div>
+        <div class="muted" style="margin-top:8px">Prévia:</div>
+        <div class="wa-prev" id="wa-prev"></div>
+      </div>
+    </div>
+  </details>
   <div class="aviso" style="margin:10px 0">ℹ️ Cada imobiliária aparece uma única vez, com <b>1 anúncio de exemplo</b> e o <b>total real de imóveis no portal</b> (levantado durante a busca — por isso ela demora um pouco mais).</div>
   <div id="imob-resumo" class="muted"></div>
   <div id="imob-result" class="imob-grid"></div>
 </div>
+
+<div id="tab-itbi" class="panel" hidden>
+<aside>
+  <h1>🧾 ITBI — valores declarados</h1>
+  <div class="muted" id="it-meta">Transações imobiliárias registradas na Prefeitura do Rio.</div>
+
+  <h2>Filtros</h2>
+  <label>Período da transação</label>
+  <div class="row">
+    <span class="muted" style="flex:0 0 26px;align-self:center">de</span>
+    <select id="it-de-mes"></select><select id="it-de-ano"></select>
+  </div>
+  <div class="row" style="margin-top:6px">
+    <span class="muted" style="flex:0 0 26px;align-self:center">até</span>
+    <select id="it-ate-mes"></select><select id="it-ate-ano"></select>
+  </div>
+  <label>Tipo de imóvel <span class="muted">(nenhum marcado = todos)</span></label>
+  <div class="it-tipos" id="it-tipos"></div>
+  <div class="row">
+    <div><label>Área mín (m²)</label><input id="it-amin" type="number" min="0" placeholder="—"></div>
+    <div><label>Área máx (m²)</label><input id="it-amax" type="number" min="0" placeholder="—"></div>
+  </div>
+  <div class="row">
+    <div><label>Valor mín (R$)</label><input id="it-vmin" type="number" min="0" step="10000" placeholder="—"></div>
+    <div><label>Valor máx (R$)</label><input id="it-vmax" type="number" min="0" step="10000" placeholder="—"></div>
+  </div>
+
+  <h2>Localização</h2>
+  <div class="seg" id="it-loctipo">
+    <button data-t="zona" class="on">Zona</button>
+    <button data-t="bairro">Bairro</button>
+    <button data-t="rua">Rua</button>
+    <button data-t="poligono">Polígono</button>
+  </div>
+  <div id="it-loc-zona"><label>Zona</label>
+    <select id="it-zona"><option>Zona Sul</option><option>Zona Norte</option><option>Zona Oeste</option><option>Centro</option><option value="">Cidade inteira</option></select>
+  </div>
+  <div id="it-loc-bairro" hidden><label>Bairros (separados por vírgula)</label>
+    <input id="it-bairros" placeholder="Copacabana, Ipanema, Leblon"></div>
+  <div id="it-loc-rua" hidden>
+    <div class="row">
+      <div style="flex:3"><label>Nome da rua</label><input id="it-rua" placeholder="Rua Barão da Torre"></div>
+      <div style="flex:1"><label>Número</label><input id="it-numero" placeholder="—"></div>
+    </div>
+  </div>
+  <div id="it-loc-poligono" hidden>
+    <p class="muted">Use a ferramenta de polígono (▱) no mapa para desenhar a área.
+       <b id="it-poli-status">Nenhum polígono.</b></p>
+    <button class="ghost mini" id="it-limpa-poli">Limpar polígono</button>
+  </div>
+
+  <label>Máx. de transações exibidas</label>
+  <input id="it-limite" type="number" min="100" max="5000" step="100" value="2000">
+  <div class="muted" style="font-size:11px;margin-top:3px">
+    Mapa e tabela mostram as mais recentes até este teto. As estatísticas usam <b>todas</b> as transações do filtro.
+  </div>
+
+  <button class="primary" id="it-buscar">🔎 Buscar transações</button>
+
+  <h2>Buscas salvas</h2>
+  <div class="row">
+    <input id="it-nome-busca" placeholder="Nome desta busca">
+    <button class="ghost mini" id="it-salvar" style="flex:0 0 auto">Salvar</button>
+  </div>
+  <div id="it-salvas"></div>
+</aside>
+
+<main>
+  <div id="it-map"></div>
+  <div class="results">
+    <div id="it-avisos"></div>
+    <div class="results-top">
+      <div id="it-resumo" class="muted">Configure os filtros e clique em <b>Buscar transações</b>.</div>
+      <div class="colpicker">
+        <button id="it-btn-cols" class="ghost mini" type="button">⚙ Colunas ▾</button>
+        <div id="it-cols-menu" class="cols-menu" hidden></div>
+      </div>
+    </div>
+    <div id="it-stats"></div>
+    <div class="tabela-wrap">
+      <table><thead id="it-cabecalho"></thead><tbody id="it-linhas"></tbody></table>
+    </div>
+  </div>
+</main>
+</div><!-- /tab-itbi -->
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
@@ -303,7 +436,7 @@ function montarMenuCols(){
   ).join('');
 }
 $('#btn-cols').onclick = e => { e.stopPropagation(); const m=$('#cols-menu'); m.hidden=!m.hidden; };
-document.addEventListener('click', e => { if(!e.target.closest('.colpicker')) $('#cols-menu').hidden=true; });
+document.addEventListener('click', e => { if(!e.target.closest('.colpicker')){ $('#cols-menu').hidden=true; $('#it-cols-menu').hidden=true; } });
 $('#cols-menu').onchange = e => {
   const k=e.target.dataset.k; if(!k) return;
   if(e.target.checked) visiveis.add(k);
@@ -433,7 +566,9 @@ document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
   const alvo=b.dataset.tab;
   $('#tab-buscar').hidden = alvo!=='buscar';
   $('#tab-imob').hidden   = alvo!=='imob';
+  $('#tab-itbi').hidden   = alvo!=='itbi';
   if(alvo==='buscar') setTimeout(()=>map.invalidateSize(), 60); // Leaflet recalcula ao reexibir
+  if(alvo==='itbi') itAbrir();
 });
 
 // ---- aba Imobiliárias ----
@@ -444,7 +579,7 @@ document.querySelectorAll('#imob-loctipo button').forEach(b => b.onclick = () =>
   $('#imob-loc-bairro').hidden = t!=='bairro';
 });
 function fmtTel(t){
-  const d=(t||'').replace(/\D/g,'');
+  const d=(t||'').replace(/\D/g,'').replace(/^0+/,'');
   if(d.length===11) return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
   if(d.length===10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
   return t||'—';
@@ -464,40 +599,414 @@ $('#imob-buscar').onclick = async () => {
   }catch(e){ $('#imob-resumo').textContent='Erro: '+e; }
   finally{ btn.disabled=false; btn.textContent='🔎 Levantar imobiliárias'; }
 };
+// ---- WhatsApp: remetentes, mensagem padrão e controle de contatos ----
+const STATUS = {enviada:'Enviada', respondeu:'Respondeu', sem_interesse:'Sem interesse'};
+let remetentes = [], contatos = [];
+const esc = s => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(url, method='GET', body){
+  const r = await fetch(url,{method, headers:{'content-type':'application/json'}, body: body?JSON.stringify(body):undefined});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+const fmtData = s => s ? `${s.slice(8,10)}/${s.slice(5,7)}` : '';
+const remetenteAtual = () => remetentes.find(r => r.id===Number($('#wa-remetente').value)) || null;
+const contatosDe = id => contatos.filter(c => c.imobiliaria_id===id);   // já vem do mais novo p/ o mais antigo
+// WhatsApp só atende celular: 11 dígitos com 9 após o DDD (fixo de 10 dígitos fica de fora).
+let telManual = {};
+try{ telManual = JSON.parse(localStorage.getItem('wa_tel_manual')||'{}'); }catch(e){}
+function normTel(t){
+  let d=(t||'').replace(/\D/g,'').replace(/^0+/,'');
+  if(d.length>=12 && d.startsWith('55')) d=d.slice(2);
+  return (d.length===10||d.length===11) ? d : null;
+}
+function numeroWa(im){
+  const m=normTel(telManual[im.id]); if(m) return '55'+m;    // número digitado à mão vale para qualquer DDD/tipo
+  for(const t of [im.celular, im.contato]){
+    let d=(t||'').replace(/\D/g,'').replace(/^0+/,'');
+    if(d.length===13 && d.startsWith('55')) d=d.slice(2);
+    if(d.length===11 && d[2]==='9') return '55'+d;
+  }
+  return null;
+}
+function montaMensagem(im){
+  const an=im.anuncio||{}, rem=remetenteAtual();
+  const v={imobiliaria:im.nome, bairro:an.bairro||'', link_anuncio:an.url||'', remetente:rem?rem.nome:''};
+  return $('#wa-msg').value.replace(/\{(imobiliaria|bairro|link_anuncio|remetente)\}/g,(_,k)=>v[k]);
+}
+function atualizaPrevia(){
+  const im=((window._ultImob||{}).imobiliarias||[])[0] || {nome:'Imobiliária Exemplo', anuncio:{bairro:'Ipanema', url:'https://www.zapimoveis.com.br/imovel/...'}};
+  $('#wa-prev').textContent = montaMensagem(im);
+}
+function renderRemetentes(){
+  const sel=$('#wa-remetente'), atual=sel.value || localStorage.getItem('wa_rem') || '';
+  sel.innerHTML = remetentes.length ? remetentes.map(r=>`<option value="${r.id}">${esc(r.nome)}${r.numero?' · '+esc(fmtTel(r.numero)):''}</option>`).join('')
+                                    : '<option value="">— cadastre um remetente —</option>';
+  if(remetentes.some(r=>String(r.id)===atual)) sel.value=atual;
+  $('#wa-rem-lista').innerHTML = remetentes.map(r=>`<div class="saved"><span><b>${esc(r.nome)}</b> <small>${esc(fmtTel(r.numero))}</small></span>
+    <button class="mini ghost" data-remdel="${r.id}">✕</button></div>`).join('');
+  const f=$('#imob-fcont'), fv=f.value||'todas';
+  f.innerHTML = '<option value="todas">Todas</option><option value="nao">Ainda não contactadas</option><option value="sim">Já contactadas</option>'
+    + remetentes.map(r=>`<option value="por:${r.id}">Contactadas por ${esc(r.nome)}</option>`).join('');
+  f.value = [...f.options].some(o=>o.value===fv) ? fv : 'todas';
+  atualizaPrevia();
+}
+async function carregaWa(){
+  try{
+    [remetentes, contatos] = await Promise.all([api('/api/whatsapp/remetentes'), api('/api/whatsapp/contatos')]);
+    $('#wa-msg').value = (await api('/api/whatsapp/mensagem')).texto;
+    renderRemetentes();
+    if(window._ultImob) renderImob(window._ultImob);
+  }catch(e){ $('#wa-status').textContent='Erro ao carregar: '+e.message; }
+}
+$('#wa-remetente').onchange = () => { localStorage.setItem('wa_rem', $('#wa-remetente').value); atualizaPrevia(); };
+$('#wa-msg').oninput = atualizaPrevia;
+$('#wa-msg-salvar').onclick = async () => {
+  try{ await api('/api/whatsapp/mensagem','PUT',{texto:$('#wa-msg').value}); $('#wa-status').textContent='✔ salva'; }
+  catch(e){ $('#wa-status').textContent='Erro: '+e.message; }
+  setTimeout(()=>$('#wa-status').textContent='',2500);
+};
+$('#wa-rem-add').onclick = async () => {
+  const nome=$('#wa-rem-nome').value.trim(); if(!nome) return;
+  const r = await api('/api/whatsapp/remetentes','POST',{nome, numero:$('#wa-rem-num').value});
+  remetentes.push(r); $('#wa-rem-nome').value=''; $('#wa-rem-num').value='';
+  renderRemetentes(); $('#wa-remetente').value=r.id; localStorage.setItem('wa_rem', r.id); atualizaPrevia();
+};
+$('#wa-rem-lista').onclick = async e => {
+  const id=e.target.dataset.remdel; if(!id) return;
+  const r=remetentes.find(x=>x.id===Number(id));
+  if(!confirm(`Remover o remetente “${r.nome}”? Os contatos já registrados continuam no histórico.`)) return;
+  await api('/api/whatsapp/remetentes/'+id,'DELETE');
+  remetentes=remetentes.filter(x=>x.id!==Number(id)); renderRemetentes();
+  if(window._ultImob) renderImob(window._ultImob);
+};
+async function registraContato(im, num){
+  const rem=remetenteAtual(), an=im.anuncio||{};
+  const c = await api('/api/whatsapp/contatos','POST',{imobiliaria_id:im.id, imobiliaria_nome:im.nome,
+    remetente_id:rem?rem.id:null, remetente_nome:rem?rem.nome:'', telefone:num||im.contato||'', anuncio_url:an.url||''});
+  contatos.unshift(c); renderImob(window._ultImob);
+}
+async function enviaWa(im){
+  const rem=remetenteAtual();
+  if(!rem){ $('#wa-status').textContent='Cadastre e escolha um remetente primeiro.'; return; }
+  const num=numeroWa(im); if(!num) return;
+  const ant=contatosDe(im.id)[0];
+  if(ant && !confirm(`${im.nome} já foi contactada por ${ant.remetente_nome||'—'} em ${fmtData(ant.criado_em)}. Enviar de novo como ${rem.nome}?`)) return;
+  window.open(`https://wa.me/${num}?text=${encodeURIComponent(montaMensagem(im))}`,'_blank','noopener');
+  await registraContato(im, num);
+}
+$('#imob-result').onclick = async e => {
+  const b=e.target.closest('[data-act]'); if(!b) return;
+  const im=(window._ultImob.imobiliarias||[]).find(x=>x.id===b.dataset.imob);
+  if(b.dataset.act==='telman'){
+    const v=prompt('WhatsApp de '+im.nome+' (DDD + número). Deixe vazio para remover:', telManual[im.id]||'');
+    if(v===null) return;
+    if(v.trim()===''){ delete telManual[im.id]; }
+    else if(normTel(v)){ telManual[im.id]=normTel(v); }
+    else { $('#wa-status').textContent='Número inválido: use DDD + 8 ou 9 dígitos.'; setTimeout(()=>$('#wa-status').textContent='',3500); return; }
+    try{ localStorage.setItem('wa_tel_manual', JSON.stringify(telManual)); }catch(e){}
+    renderImob(window._ultImob);
+  }
+  else if(b.dataset.act==='enviar') await enviaWa(im);
+  else if(b.dataset.act==='marcar') await registraContato(im, null);
+  else if(b.dataset.act==='desfazer'){
+    await api('/api/whatsapp/contatos/'+b.dataset.cid,'DELETE');
+    contatos=contatos.filter(c=>c.id!==Number(b.dataset.cid)); renderImob(window._ultImob);
+  }
+};
+$('#imob-result').onchange = async e => {
+  const t=e.target, cid=t.dataset.cid; if(!cid) return;
+  const campo = t.dataset.act==='status' ? 'status' : t.dataset.act==='obs' ? 'observacao' : null; if(!campo) return;
+  const c = await api('/api/whatsapp/contatos/'+cid,'PATCH',{[campo]:t.value});
+  Object.assign(contatos.find(x=>x.id===Number(cid)), c);
+  if(campo==='status') renderImob(window._ultImob);
+};
+
 // re-filtra na hora, sem refazer a busca
-$('#imob-tmin').oninput = $('#imob-tmax').oninput = () => { if(window._ultImob) renderImob(window._ultImob); };
+$('#imob-tmin').oninput = $('#imob-tmax').oninput = $('#imob-fcont').onchange = () => { if(window._ultImob) renderImob(window._ultImob); };
 function renderImob(d){
   const tmin = $('#imob-tmin').value.trim()===''?null:Number($('#imob-tmin').value);
   const tmax = $('#imob-tmax').value.trim()===''?null:Number($('#imob-tmax').value);
+  const fc = $('#imob-fcont').value || 'todas';
   const todos = d.imobiliarias||[];
   const lista = todos.filter(im=>{
+    const cs = contatosDe(im.id);
+    if(fc==='nao' && cs.length) return false;
+    if(fc==='sim' && !cs.length) return false;
+    if(fc.startsWith('por:') && !cs.some(c=>c.remetente_id===Number(fc.slice(4)))) return false;
     if(tmin===null && tmax===null) return true;
     if(im.total_portal==null) return false;        // sem total não dá pra comparar
     if(tmin!==null && im.total_portal<tmin) return false;
     if(tmax!==null && im.total_portal>tmax) return false;
     return true;
   });
-  const filtroTxt = (tmin!==null||tmax!==null) ? ` · <b>${lista.length}</b> após filtro (${tmin??'0'}–${tmax??'∞'} anúncios)` : '';
-  $('#imob-resumo').innerHTML = `<b>${d.total_imobiliarias}</b> imobiliárias encontradas${filtroTxt} · ordenadas pelo total de imóveis no portal.`;
+  const nContact = todos.filter(im=>contatosDe(im.id).length).length;
+  const filtroOn = tmin!==null||tmax!==null||fc!=='todas';
+  const filtroTxt = filtroOn ? ` · <b>${lista.length}</b> após filtros` : '';
+  $('#imob-resumo').innerHTML = `<b>${d.total_imobiliarias}</b> imobiliárias encontradas${filtroTxt} · <b>${nContact}</b> já contactadas · ordenadas pelo total de imóveis no portal.`;
+  atualizaPrevia();
   $('#imob-result').innerHTML = lista.map(im=>{
-    const an=im.anuncio||{}; const dig=(im.contato||'').replace(/\D/g,'');
-    const wa = dig.length===11 ? ` · <a class="wa" href="https://wa.me/55${dig}" target="_blank" rel="noopener">WhatsApp</a>` : '';
-    const logo = im.logo ? `<img src="${im.logo}" alt="" onerror="this.remove()">` : '';
+    const an=im.anuncio||{}; const num=numeroWa(im);
+    const cs=contatosDe(im.id), c=cs[0];
+    const logo = im.logo ? `<img src="${esc(im.logo)}" alt="" onerror="this.remove()">` : '';
     const badge = im.total_portal != null
       ? `<span class="qtd">${im.total_portal.toLocaleString('pt-BR')} imóveis</span>`
       : `<span class="qtd" style="background:var(--line)">total indisponível</span>`;
     const agencia = im.agencia_url
-      ? `<div class="linha"><a href="${im.agencia_url}" target="_blank" rel="noopener">🔗 ver imóveis no ZAP ↗</a></div>` : '';
-    return `<div class="imob-card">${logo}<div class="corpo">
-      <div class="topo"><span class="nome">${im.nome}</span>${badge}</div>
+      ? `<div class="linha"><a href="${esc(im.agencia_url)}" target="_blank" rel="noopener">🔗 ver imóveis no ZAP ↗</a></div>` : '';
+    const acaoWa = num
+      ? `<button class="wa-btn" data-act="enviar" data-imob="${esc(im.id)}">💬 ${c?'Enviar de novo':'Enviar WhatsApp'}</button>`
+      : (c ? '' : `<span class="muted">sem celular (só fixo)</span> <button class="mini ghost" data-act="marcar" data-imob="${esc(im.id)}">✔ Marcar contactada</button>`);
+    const box = c ? `<div class="contato-box">✅ Contactada por <b>${esc(c.remetente_nome||'—')}</b> em ${fmtData(c.criado_em)}${cs.length>1?` · ${cs.length} contatos`:''}
+        <div><select data-act="status" data-cid="${c.id}">${Object.entries(STATUS).map(([k,v])=>`<option value="${k}"${c.status===k?' selected':''}>${v}</option>`).join('')}</select>
+        <button class="mini ghost" data-act="desfazer" data-cid="${c.id}" data-imob="${esc(im.id)}" title="Desfaz o último contato">desfazer</button></div>
+        <input data-act="obs" data-cid="${c.id}" placeholder="Observação…" value="${esc(c.observacao)}"></div>` : '';
+    return `<div class="imob-card${c?' contatada':''}">${logo}<div class="corpo">
+      <div class="topo"><span class="nome">${esc(im.nome)}</span>${badge}</div>
       ${agencia}
-      <div class="linha">${im.creci?('CRECI '+im.creci):'CRECI não informado'}${im.tier?' · '+im.tier:''}</div>
-      <div class="linha">📞 ${fmtTel(im.contato)}${wa}</div>
-      <div class="linha">Ex.: ${an.bairro||''}${an.area?' · '+an.area+'m²':''}${an.preco?' · '+fmt(an.preco):''}${an.url?` · <a href="${an.url}" target="_blank" rel="noopener">ver anúncio ↗</a>`:''}</div>
+      <div class="linha">${im.creci?('CRECI '+esc(im.creci)):'CRECI não informado'}${im.tier?' · '+esc(im.tier):''}</div>
+      <div class="linha">📞 ${esc(fmtTel(im.contato))} ${acaoWa}</div>
+      <div class="linha">${telManual[im.id]?`💬 nº manual: <b>${esc(fmtTel(telManual[im.id]))}</b> `:''}<button class="mini ghost" data-act="telman" data-imob="${esc(im.id)}">✏️ ${telManual[im.id]?'alterar':'informar'} nº manual</button></div>
+      <div class="linha">Ex.: ${esc(an.bairro||'')}${an.area?' · '+an.area+'m²':''}${an.preco?' · '+fmt(an.preco):''}${an.url?` · <a href="${esc(an.url)}" target="_blank" rel="noopener">ver anúncio ↗</a>`:''}</div>
+      ${box}
     </div></div>`;
   }).join('') || '<div class="muted">Nenhuma imobiliária encontrada.</div>';
 }
-carregaPortais(); carregaSalvas();
+// ================= aba ITBI (valores declarados) =================
+const IT = { meta:null, map:null, camada:null, drawn:null, poligono:null, dados:[], grupos:{}, sel:new Set(), sort:{k:null,dir:1} };
+const IT_MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const IT_PREC = {1:'nº exato', 2:'aprox. (nº vizinho)', 3:'aprox. (rua)', 0:'sem mapa'};
+const itData = t => `${String(t.mes).padStart(2,'0')}/${t.ano}`;
+const itEnd = t => t.logradouro + (t.numero ? ', '+t.numero : '');
+const IT_COLS = [
+  {k:'periodo',     label:'Data',            type:'num',  get:t=>t.periodo,     render:itData},
+  {k:'bairro',      label:'Bairro',          type:'text', get:t=>t.bairro},
+  {k:'endereco',    label:'Endereço',        type:'text', get:itEnd},
+  {k:'complemento', label:'Complemento',     type:'text', get:t=>t.complemento},
+  {k:'tipologia',   label:'Tipo',            type:'text', get:t=>t.tipologia},
+  {k:'area',        label:'Área (m²)',       type:'num',  get:t=>t.area,        render:t=>t.area?t.area.toLocaleString('pt-BR')+' m²':'—'},
+  {k:'valor',       label:'Valor declarado', type:'num',  get:t=>t.valor,       render:t=>fmt(t.valor)},
+  {k:'valor_m2',    label:'R$/m²',           type:'num',  get:t=>t.valor_m2,    render:t=>t.valor_m2?fmt(Math.round(t.valor_m2)):'—'},
+  {k:'utilizacao',  label:'Utilização',      type:'text', get:t=>t.utilizacao},
+  {k:'prec',        label:'Posição no mapa', type:'num',  get:t=>t.prec,        render:t=>IT_PREC[t.prec]},
+];
+let itVisiveis = new Set(JSON.parse(localStorage.getItem('itbi_cols')||'null') ||
+  ['periodo','bairro','endereco','complemento','tipologia','area','valor','valor_m2']);
+
+function itMontarMenuCols(){
+  $('#it-cols-menu').innerHTML = IT_COLS.map(c=>
+    `<label class="chk"><input type="checkbox" data-k="${c.k}" ${itVisiveis.has(c.k)?'checked':''}> ${c.label}</label>`).join('');
+}
+$('#it-btn-cols').onclick = e => { e.stopPropagation(); const m=$('#it-cols-menu'); m.hidden=!m.hidden; };
+$('#it-cols-menu').onchange = e => {
+  const k=e.target.dataset.k; if(!k) return;
+  if(e.target.checked) itVisiveis.add(k);
+  else if(itVisiveis.size>1) itVisiveis.delete(k);
+  else { e.target.checked=true; return; }
+  localStorage.setItem('itbi_cols', JSON.stringify([...itVisiveis])); itRenderTabela();
+};
+
+function itRenderTabela(){
+  const cols = IT_COLS.filter(c=>itVisiveis.has(c.k));
+  $('#it-cabecalho').innerHTML = '<tr>' + cols.map(c=>{
+    const ar = IT.sort.k===c.k ? `<span class="arrow">${IT.sort.dir>0?'▲':'▼'}</span>` : '';
+    return `<th class="sortable" data-k="${c.k}">${c.label} ${ar}</th>`;
+  }).join('') + '<th></th></tr>';
+  let dados = IT.dados.slice();
+  if(IT.sort.k){ const col=IT_COLS.find(c=>c.k===IT.sort.k);
+    dados.sort((a,b)=>cmp(col.get(a),col.get(b),col.type,IT.sort.dir)); }
+  $('#it-linhas').innerHTML = dados.map(t=>{
+    const q = encodeURIComponent(`${itEnd(t)}, ${t.bairro}, Rio de Janeiro`);
+    return `<tr data-id="${t.id}" class="${IT.sel.has(t.id)?'sel':''}">${cols.map(c=>`<td>${c.render?c.render(t):esc(c.get(t)??'—')}</td>`).join('')}`+
+      `<td><a href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener">mapa ↗</a></td></tr>`;
+  }).join('') || `<tr><td class="muted">Nenhuma transação. Clique em <b>Buscar transações</b>.</td></tr>`;
+}
+$('#it-cabecalho').onclick = e => {
+  const th=e.target.closest('th[data-k]'); if(!th) return;
+  const k=th.dataset.k;
+  if(IT.sort.k===k) IT.sort.dir=-IT.sort.dir; else IT.sort={k, dir:1};
+  itRenderTabela();
+};
+
+// ---- localização ----
+function itSetLoc(t){
+  document.querySelectorAll('#it-loctipo button').forEach(b=>b.classList.toggle('on', b.dataset.t===t));
+  ['zona','bairro','rua','poligono'].forEach(x=>$('#it-loc-'+x).hidden = (x!==t));
+}
+document.querySelectorAll('#it-loctipo button').forEach(b=> b.onclick=()=>itSetLoc(b.dataset.t));
+function itSetPoligono(pts){
+  IT.drawn.clearLayers(); IT.poligono = pts && pts.length>=3 ? pts : null;
+  if(IT.poligono) IT.drawn.addLayer(L.polygon(IT.poligono));
+  $('#it-poli-status').textContent = IT.poligono ? `Polígono com ${IT.poligono.length} pontos.` : 'Nenhum polígono.';
+}
+$('#it-limpa-poli').onclick = () => itSetPoligono(null);
+
+// ---- mapa (criado na 1ª vez que a aba abre: o Leaflet precisa do contêiner visível) ----
+async function itAbrir(){
+  if(!IT.map){
+    IT.map = L.map('it-map', {preferCanvas:true}).setView([-22.97, -43.19], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© OpenStreetMap · ITBI: SMF/Prefeitura do Rio', maxZoom:19 }).addTo(IT.map);
+    IT.camada = L.layerGroup().addTo(IT.map);
+    IT.drawn = new L.FeatureGroup().addTo(IT.map);
+    IT.map.addControl(new L.Control.Draw({
+      draw:{ polygon:true, marker:false, polyline:false, rectangle:false, circle:false, circlemarker:false },
+      edit:{ featureGroup:IT.drawn }
+    }));
+    IT.map.on(L.Draw.Event.CREATED, e => { itSetPoligono(e.layer.getLatLngs()[0].map(p=>[p.lat,p.lng])); itSetLoc('poligono'); });
+    IT.map.on(L.Draw.Event.EDITED, () => { const l=IT.drawn.getLayers()[0]; if(l) IT.poligono=l.getLatLngs()[0].map(p=>[p.lat,p.lng]); });
+    IT.map.on(L.Draw.Event.DELETED, () => itSetPoligono(null));
+    itMontarMenuCols(); itRenderTabela();
+    await itCarregaMeta(); itCarregaSalvas();
+  }
+  setTimeout(()=>IT.map.invalidateSize(), 60);
+}
+function itSetPeriodo(pfx, periodo){
+  $(`#it-${pfx}-ano`).value = periodo ? Math.floor(periodo/100) : '';
+  $(`#it-${pfx}-mes`).value = periodo ? periodo%100 : '';
+}
+function itGetPeriodo(pfx, mesPadrao){
+  const a=$(`#it-${pfx}-ano`).value; if(!a) return null;
+  return Number(a)*100 + Number($(`#it-${pfx}-mes`).value || mesPadrao);
+}
+async function itCarregaMeta(){
+  const m = IT.meta = await (await fetch('/api/itbi/meta')).json();
+  if(!m.disponivel){
+    $('#it-avisos').innerHTML = '<div class="aviso">⚠️ A base do ITBI ainda não foi importada. No terminal, em <code>buscador/backend</code>, rode <code>PYTHONPATH=.deps python3 itbi_import.py --baixar</code> e recarregue a página.</div>';
+    $('#it-buscar').disabled = true; return;
+  }
+  const p = x => `${IT_MESES[x%100-1]}/${Math.floor(x/100)}`;
+  $('#it-meta').innerHTML = `<b>${m.total.toLocaleString('pt-BR')}</b> transações de ${p(m.periodo_min)} a ${p(m.periodo_max)} · fonte: Secretaria Municipal de Fazenda`;
+  const anos=[]; for(let a=Math.floor(m.periodo_max/100); a>=Math.floor(m.periodo_min/100); a--) anos.push(a);
+  const optMes = '<option value="">mês</option>' + IT_MESES.map((n,i)=>`<option value="${i+1}">${n}</option>`).join('');
+  const optAno = '<option value="">—</option>' + anos.map(a=>`<option>${a}</option>`).join('');
+  ['de','ate'].forEach(x=>{ $(`#it-${x}-mes`).innerHTML=optMes; $(`#it-${x}-ano`).innerHTML=optAno; });
+  // padrão: últimos 24 meses da base
+  const fim=m.periodo_max; let a=Math.floor(fim/100)-2, me=fim%100+1; if(me>12){ me=1; a++; }
+  itSetPeriodo('de', a*100+me); itSetPeriodo('ate', fim);
+  $('#it-tipos').innerHTML = m.tipologias.map(t=>
+    `<label class="chk"><input type="checkbox" value="${esc(t.nome)}" ${t.nome==='APARTAMENTO'?'checked':''}> ${esc(t.nome||'(sem tipo)')} <span class="muted">${t.n.toLocaleString('pt-BR')}</span></label>`).join('');
+}
+
+function itColetaParams(){
+  const t = document.querySelector('#it-loctipo button.on').dataset.t;
+  const loc = { tipo:t, zona:$('#it-zona').value, bairros:[], rua:null, poligono:[] };
+  if(t==='bairro') loc.bairros = $('#it-bairros').value.split(',').map(s=>s.trim()).filter(Boolean);
+  if(t==='rua') loc.rua = $('#it-rua').value.trim() || null;
+  if(t==='poligono') loc.poligono = IT.poligono || [];
+  return {
+    localizacao: loc, numero: t==='rua' ? ($('#it-numero').value.trim()||null) : null,
+    area_min:num('#it-amin'), area_max:num('#it-amax'), valor_min:num('#it-vmin'), valor_max:num('#it-vmax'),
+    periodo_ini: itGetPeriodo('de',1), periodo_fim: itGetPeriodo('ate',12),
+    tipologias: [...document.querySelectorAll('#it-tipos input:checked')].map(c=>c.value),
+    utilizacoes: [],
+    limite: Math.min(Math.max(num('#it-limite')||2000, 100), 5000)
+  };
+}
+
+$('#it-buscar').onclick = async () => {
+  const btn=$('#it-buscar'); btn.disabled=true; btn.textContent='Buscando…';
+  $('#it-avisos').innerHTML=''; $('#it-resumo').textContent='Consultando a base do ITBI…';
+  try{
+    const p = itColetaParams();
+    if(p.localizacao.tipo==='poligono' && !p.localizacao.poligono.length){ $('#it-resumo').textContent='Desenhe um polígono no mapa primeiro.'; return; }
+    if(p.localizacao.tipo==='rua' && !p.localizacao.rua){ $('#it-resumo').textContent='Informe o nome da rua.'; return; }
+    if(p.localizacao.tipo==='bairro' && !p.localizacao.bairros.length){ $('#it-resumo').textContent='Informe ao menos um bairro.'; return; }
+    const r = await fetch('/api/itbi/buscar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(p)});
+    if(!r.ok) throw new Error((await r.json()).detail || r.status);
+    itRender(await r.json());
+  }catch(e){ $('#it-resumo').textContent='Erro: '+e.message; }
+  finally{ btn.disabled=false; btn.textContent='🔎 Buscar transações'; }
+};
+
+const itEstilo = g => { const sel=g.itens.some(t=>IT.sel.has(t.id));
+  return { radius:Math.min(11, 3.5+Math.sqrt(g.itens.length)), color:'#fff', weight:1,
+           fillColor: sel?'#e23b3b':'#2a72e8', fillOpacity: g.prec===1 ? .9 : .5 }; };
+function itPopup(g){
+  const t0=g.itens[0], n=g.itens.length;
+  const linhas = g.itens.slice(0,8).map(t=>`<tr><td>${itData(t)}</td><td>${esc(t.complemento||'')}</td><td>${t.area?t.area+'m²':'—'}</td><td><b>${fmt(t.valor)}</b></td><td>${t.valor_m2?fmt(Math.round(t.valor_m2))+'/m²':''}</td></tr>`).join('');
+  return `<b>${esc(itEnd(t0))}</b> — ${esc(t0.bairro)}<br><span style="color:#666">${n} transaç${n>1?'ões':'ão'} · posição: ${IT_PREC[g.prec]}</span>`
+       + `<table style="font-size:12px;margin-top:4px;color:#222">${linhas}</table>${n>8?`<i>+ ${n-8} na tabela</i>`:''}`;
+}
+function itAtualizaGrupo(g){ if(!g) return; g.m.setStyle(itEstilo(g)); if(g.itens.some(t=>IT.sel.has(t.id))) g.m.bringToFront(); }
+function itMarcaLinha(id, on){ const tr=document.querySelector(`#it-linhas tr[data-id="${id}"]`); if(tr) tr.classList.toggle('sel', on); return tr; }
+
+function itRender(d){
+  IT.dados = d.transacoes||[]; IT.sel.clear(); IT.grupos = {}; IT.camada.clearLayers();
+  const s=d.stats||{}, f=v=>v==null?'—':fmt(Math.round(v));
+  $('#it-resumo').innerHTML = `<b>${d.total.toLocaleString('pt-BR')}</b> transações`
+    + (d.total>d.exibidos ? ` · mapa e tabela mostram as <b>${d.exibidos.toLocaleString('pt-BR')}</b> mais recentes` : '');
+  $('#it-stats').innerHTML = d.total ? `<div class="it-stats">
+      <div class="it-stat"><small>R$/m² — mediana</small><b>${f(s.m2_mediana)}</b></div>
+      <div class="it-stat"><small>R$/m² — faixa central (25%–75%)</small><b>${f(s.m2_p25)} – ${f(s.m2_p75)}</b></div>
+      <div class="it-stat"><small>R$/m² — média</small><b>${f(s.m2_media)}</b></div>
+      <div class="it-stat"><small>Valor declarado — mediana</small><b>${f(s.valor_mediana)}</b></div>
+    </div>
+    <div class="it-anos">${(d.por_ano||[]).map(a=>`<span class="it-ano"><b>${a.ano}</b> ${f(a.m2_mediana)}/m² · ${a.n.toLocaleString('pt-BR')}</span>`).join('')}</div>` : '';
+  if(d.sem_coordenada) $('#it-avisos').innerHTML = `<div class="aviso">ℹ️ ${d.sem_coordenada.toLocaleString('pt-BR')} transações sem endereço localizável ficam só na tabela.</div>`;
+  itRenderTabela();
+  for(const t of IT.dados){
+    if(t.lat==null) continue;
+    const k=t.lat+','+t.lon;
+    (IT.grupos[k] ||= {k, lat:t.lat, lon:t.lon, prec:t.prec, itens:[], m:null}).itens.push(t);
+    t._g = k;
+  }
+  const gs = Object.values(IT.grupos);
+  for(const g of gs){
+    g.m = L.circleMarker([g.lat,g.lon], itEstilo(g)).bindPopup(()=>itPopup(g), {maxWidth:420});
+    g.m.on('click', ()=>{                      // clicar no ponto seleciona todas as transações do endereço
+      const ligar = !g.itens.every(t=>IT.sel.has(t.id)); let primeira=null;
+      g.itens.forEach(t=>{ ligar?IT.sel.add(t.id):IT.sel.delete(t.id); const tr=itMarcaLinha(t.id, ligar); primeira ||= tr; });
+      itAtualizaGrupo(g);
+      if(ligar && primeira) primeira.scrollIntoView({block:'nearest'});
+    });
+    IT.camada.addLayer(g.m);
+  }
+  IT.map.invalidateSize();
+  if(gs.length) IT.map.fitBounds(L.latLngBounds(gs.map(g=>[g.lat,g.lon])).pad(0.05), {maxZoom:17});
+}
+$('#it-linhas').onclick = e => {
+  if(e.target.closest('a')) return;
+  const tr=e.target.closest('tr[data-id]'); if(!tr) return;
+  const id=Number(tr.dataset.id), t=IT.dados.find(x=>x.id===id), g=IT.grupos[t._g];
+  const ligar=!IT.sel.has(id);
+  ligar?IT.sel.add(id):IT.sel.delete(id); tr.classList.toggle('sel', ligar);
+  itAtualizaGrupo(g);
+  if(ligar && g){ IT.map.panTo([g.lat,g.lon]); g.m.openPopup(); }
+};
+
+// ---- buscas salvas (guardam os filtros; abrir refaz a consulta na base local) ----
+async function itCarregaSalvas(){
+  const lst = IT.salvas = await (await fetch('/api/itbi/buscas')).json();
+  $('#it-salvas').innerHTML = lst.map(b=>`
+    <div class="saved">
+      <div><b>${esc(b.nome)}</b><br><small>${b.criado_em||''}</small></div>
+      <div class="row" style="flex:0 0 auto;gap:4px">
+        <button class="ghost mini" data-abrir="${b.id}">Abrir</button>
+        <button class="ghost mini" data-apagar="${b.id}">✕</button>
+      </div>
+    </div>`).join('') || '<div class="muted">Nenhuma busca salva ainda.</div>';
+}
+$('#it-salvar').onclick = async () => {
+  const nome=$('#it-nome-busca').value.trim(); if(!nome){ alert('Dê um nome à busca.'); return; }
+  await fetch('/api/itbi/buscas',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({nome, params:itColetaParams()})});
+  $('#it-nome-busca').value=''; itCarregaSalvas();
+};
+$('#it-salvas').onclick = async e => {
+  const b=e.target.dataset;
+  if(b.apagar){ await fetch('/api/itbi/buscas/'+b.apagar,{method:'DELETE'}); itCarregaSalvas(); return; }
+  if(!b.abrir) return;
+  const p = IT.salvas.find(x=>x.id===Number(b.abrir)).params, l=p.localizacao;
+  itSetPeriodo('de', p.periodo_ini); itSetPeriodo('ate', p.periodo_fim);
+  document.querySelectorAll('#it-tipos input').forEach(c=> c.checked = (p.tipologias||[]).includes(c.value));
+  $('#it-amin').value=p.area_min??''; $('#it-amax').value=p.area_max??'';
+  $('#it-vmin').value=p.valor_min??''; $('#it-vmax').value=p.valor_max??'';
+  $('#it-limite').value=p.limite||2000;
+  itSetLoc(l.tipo); $('#it-zona').value=l.zona??'Zona Sul';
+  $('#it-bairros').value=(l.bairros||[]).join(', '); $('#it-rua').value=l.rua||''; $('#it-numero').value=p.numero||'';
+  itSetPoligono(l.tipo==='poligono' ? l.poligono : null);
+  $('#it-buscar').click();
+};
+
+carregaPortais(); carregaSalvas(); carregaWa();
 </script>
 </body>
 </html>

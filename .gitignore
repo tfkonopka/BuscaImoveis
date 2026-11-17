@@ -39,3 +39,8 @@ env/
 buscador/backend/.deps/
 buscador/backend/buscador.db
 *.db
+
+# ITBI — planilhas da Prefeitura e base importada (grandes; refeitas por itbi_import.py)
+buscador/backend/dados_itbi/
+*.db-wal
+*.db-shm

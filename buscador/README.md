@@ -60,14 +60,56 @@ Depois abra <http://127.0.0.1:8777> no navegador.
 ## Aba "Imobiliárias" (só ZAP)
 
 Levanta os anunciantes de uma localização no ZAP e mostra, por imobiliária:
-**nome, contato (telefone + WhatsApp), CRECI, 1 anúncio de exemplo** e **quantos
-anúncios dela aparecem na amostra** coletada.
-
-> A contagem é feita sobre a amostra baixada (o ZAP não permite filtrar/contar por
-> anunciante, nem expõe facetas). Aumente a amostra para se aproximar do total na
-> região. Nome, contato e anúncio de exemplo são exatos.
+**nome, contato, CRECI, 1 anúncio de exemplo** e o **total real de imóveis dela no
+portal** (lido da página do anúncio durante a busca). Há filtro por faixa de total.
 
 Endpoint: `POST /api/imobiliarias` (mesma forma de `BuscaParams`, mas só ZAP).
+
+### WhatsApp (click-to-chat oficial)
+
+Painel “💬 WhatsApp” na aba:
+
+- **Remetentes** (ex.: você e sua esposa): escolha em *Enviando como*. O link
+  `wa.me` abre o WhatsApp **logado no navegador/celular em uso** — o número
+  cadastrado é só referência e o nome entra na mensagem.
+- **Mensagem padrão** salva no banco, com variáveis `{imobiliaria}`, `{bairro}`,
+  `{link_anuncio}`, `{remetente}` e prévia.
+- **💬 Enviar WhatsApp** em cada card (só celulares de 11 dígitos): abre o chat com a
+  mensagem pronta e registra o contato. Fixos têm “Marcar contactada” manual.
+- **Controle**: quem contatou e quando, status (Enviada / Respondeu / Sem interesse),
+  observação, “desfazer”, aviso ao reenviar para quem já foi contactada e filtro
+  (todas / não contactadas / contactadas / por remetente).
+
+Endpoints: `/api/whatsapp/remetentes`, `/mensagem`, `/contatos` (SQLite local).
+Não há envio automático: você aperta Enviar no WhatsApp (sem API paga nem risco de banimento).
+
+## Aba "ITBI (valores declarados)"
+
+Mostra no mapa as **transações imobiliárias registradas no ITBI** da Prefeitura do Rio
+(cidade inteira, de 2011 em diante): rua, número, complemento, bairro, tipo, área, mês/ano
+e **valor declarado**, com R$/m². Tem as mesmas funções da aba de busca — localização por
+zona/bairro/rua(+número)/polígono, filtros de área/valor/período/tipo, tabela ordenável com
+seletor de colunas, seleção múltipla (ponto vermelho) e buscas salvas — mais um resumo de
+preços (mediana, faixa 25%–75%, média e mediana por ano) calculado sobre **todas** as
+transações do filtro.
+
+**Importar/atualizar a base** (planilhas → `itbi.db`, ~250 MB, fora do git):
+
+```bash
+cd buscador/backend
+PYTHONPATH=.deps python3 itbi_import.py --baixar     # baixa as planilhas e reimporta
+```
+
+- Fonte: planilhas `ITBI_TRANSACOES_*` da Secretaria Municipal de Fazenda
+  (<https://fazenda.prefeitura.rio/itbi-valores-medios-por-m2-de-transacoes-imobiliarias-por-trecho-de-logradouro/>).
+- Posição no mapa: cruzamento do código do logradouro + número com a camada
+  `CadLog/Numero_de_porta` do ArcGIS da Prefeitura (≈71% no número exato; 94% na Zona Sul).
+  Sem número cadastrado, usa o número vizinho na mesma rua ou o meio da rua (ponto mais
+  claro no mapa); ≈2% ficam sem coordenada e aparecem só na tabela.
+- `--refazer` baixa de novo também as bases geográficas (números de porta e logradouros).
+- O valor é o **declarado** na guia do ITBI — pode diferir do preço de mercado.
+
+Endpoints: `GET /api/itbi/meta`, `POST /api/itbi/buscar`, CRUD `/api/itbi/buscas`.
 
 ## Arquitetura
 

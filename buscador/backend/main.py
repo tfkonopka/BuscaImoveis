@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 import db
 import geo
+import itbi
 from models import BuscaParams, Imovel
 from scrapers import SCRAPERS, get_scraper
 
@@ -183,6 +184,126 @@ def criar_busca(nb: NovaBusca):
 @app.delete("/api/buscas/{bid}")
 def apagar_busca(bid: int):
     if not db.excluir_busca(bid):
+        raise HTTPException(404, "Busca não encontrada")
+    return {"ok": True}
+
+
+# ------------------------------------------------- WhatsApp (click-to-chat)
+class NovoRemetente(BaseModel):
+    nome: str
+    numero: str = ""
+
+
+@app.get("/api/whatsapp/remetentes")
+def listar_remetentes():
+    return db.listar_remetentes()
+
+
+@app.post("/api/whatsapp/remetentes")
+def criar_remetente(r: NovoRemetente):
+    nome = r.nome.strip()
+    if not nome:
+        raise HTTPException(422, "Informe o nome do remetente")
+    return db.criar_remetente(nome, "".join(ch for ch in r.numero if ch.isdigit()))
+
+
+@app.delete("/api/whatsapp/remetentes/{rid}")
+def apagar_remetente(rid: int):
+    if not db.excluir_remetente(rid):
+        raise HTTPException(404, "Remetente não encontrado")
+    return {"ok": True}
+
+
+class Mensagem(BaseModel):
+    texto: str
+
+
+@app.get("/api/whatsapp/mensagem")
+def obter_mensagem():
+    return {"texto": db.obter_mensagem()}
+
+
+@app.put("/api/whatsapp/mensagem")
+def salvar_mensagem(m: Mensagem):
+    db.salvar_mensagem(m.texto)
+    return {"texto": m.texto}
+
+
+class NovoContato(BaseModel):
+    imobiliaria_id: str
+    imobiliaria_nome: str = ""
+    remetente_id: int | None = None
+    remetente_nome: str = ""
+    telefone: str = ""
+    anuncio_url: str = ""
+    status: str = "enviada"
+    observacao: str = ""
+
+
+class EdicaoContato(BaseModel):
+    status: str | None = None
+    observacao: str | None = None
+
+
+@app.get("/api/whatsapp/contatos")
+def listar_contatos():
+    return db.listar_contatos()
+
+
+@app.post("/api/whatsapp/contatos")
+def criar_contato(c: NovoContato):
+    return db.criar_contato(c.model_dump())
+
+
+@app.patch("/api/whatsapp/contatos/{cid}")
+def editar_contato(cid: int, e: EdicaoContato):
+    r = db.atualizar_contato(cid, e.status, e.observacao)
+    if r is None:
+        raise HTTPException(404, "Contato não encontrado")
+    return r
+
+
+@app.delete("/api/whatsapp/contatos/{cid}")
+def apagar_contato(cid: int):
+    if not db.excluir_contato(cid):
+        raise HTTPException(404, "Contato não encontrado")
+    return {"ok": True}
+
+
+# ------------------------------------------------- ITBI (transações declaradas)
+@app.get("/api/itbi/meta")
+def itbi_meta():
+    return itbi.meta()
+
+
+@app.post("/api/itbi/buscar")
+async def itbi_buscar(p: itbi.ItbiParams):
+    if not itbi.disponivel():
+        raise HTTPException(503, "Base do ITBI ainda não importada. Rode: python3 itbi_import.py")
+    return await asyncio.to_thread(itbi.buscar, p)
+
+
+class NovaBuscaItbi(BaseModel):
+    nome: str
+    params: itbi.ItbiParams
+
+
+@app.get("/api/itbi/buscas")
+def itbi_listar_buscas():
+    return db.listar_buscas_itbi()
+
+
+@app.post("/api/itbi/buscas")
+def itbi_criar_busca(nb: NovaBuscaItbi):
+    nome = nb.nome.strip()
+    if not nome:
+        raise HTTPException(422, "Dê um nome à busca")
+    return db.salvar_busca_itbi(nome, nb.params.model_dump_json())
+
+
+@app.delete("/api/itbi/buscas/{bid}")
+def itbi_apagar_busca(bid: int):
+    if not db.excluir_busca_itbi(bid):
         raise HTTPException(404, "Busca não encontrada")
     return {"ok": True}
 

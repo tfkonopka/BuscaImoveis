@@ -338,6 +338,7 @@ class GlueScraper(Scraper):
                             "id": aid,
                             "nome": acc.get("name") or "(sem nome)",
                             "contato": phones.get("primary") or phones.get("mobile") or "",
+                            "celular": phones.get("mobile") or "",
                             "creci": acc.get("licenseNumber") or "",
                             "tier": acc.get("tier") or "",
                             "logo": logo.replace("{description}", "logo").replace("{action}", "fit")
