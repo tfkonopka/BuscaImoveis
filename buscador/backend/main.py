@@ -106,6 +106,8 @@ async def buscar(params: BuscaParams):
             avisos.add(f"Portal desconhecido ignorado: {nome}")
         elif not s.disponivel:
             avisos.add(f"Portal '{s.rotulo}' ainda não implementado — pulado.")
+        elif params.localizacao.tipo == "poligono" and not s.tem_coordenadas:
+            avisos.add(f"{s.rotulo} não informa a coordenada dos anúncios — fica fora da busca por polígono.")
         else:
             ativos.append(s)
 

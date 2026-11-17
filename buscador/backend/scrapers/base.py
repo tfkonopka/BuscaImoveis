@@ -18,6 +18,7 @@ class Scraper(abc.ABC):
     nome: str = "base"
     rotulo: str = "Base"
     disponivel: bool = True  # False = conector ainda não implementado
+    tem_coordenadas: bool = False  # True = anúncios trazem lat/lon (permite busca por polígono)
 
     @abc.abstractmethod
     async def buscar(self, params: BuscaParams, client: httpx.AsyncClient) -> list[Imovel]:

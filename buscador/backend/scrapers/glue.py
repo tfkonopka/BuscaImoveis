@@ -16,6 +16,7 @@ from typing import Optional
 import httpx
 from unidecode import unidecode
 
+import geo
 from models import BuscaParams, Imovel
 from scrapers.base import Scraper
 
@@ -99,8 +100,8 @@ UA = (
     "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 )
 
-# Nos modos 'rua' e 'poligono' a API não filtra no servidor, então varremos
-# mais páginas do bairro/zona e filtramos no código (até este teto bruto).
+# No modo 'rua' a API não filtra no servidor, então varremos mais páginas do
+# bairro e filtramos no código (até este teto bruto).
 SCAN_CAP_REFINO = 480
 
 
@@ -127,13 +128,15 @@ def _quartos_range(p: BuscaParams) -> Optional[str]:
 
 
 class GlueScraper(Scraper):
+    tem_coordenadas = True
+
     def __init__(self, nome: str, rotulo: str, portal: str, dominio: str):
         self.nome = nome
         self.rotulo = rotulo
         self.portal = portal  # "ZAP" | "VIVAREAL"
         self.dominio = dominio  # "www.zapimoveis.com.br"
 
-    def _params_base(self, p: BuscaParams, loc_id: str, size: int, frm: int) -> dict:
+    def _params_base(self, p: BuscaParams, loc_id: Optional[str], size: int, frm: int) -> dict:
         d: dict[str, str] = {
             "business": "RENTAL" if p.operacao == "aluguel" else "SALE",
             "listingType": "USED",
@@ -142,10 +145,11 @@ class GlueScraper(Scraper):
             "includeFields": "search",
             "size": str(size),
             "from": str(frm),
-            "addressLocationId": loc_id,
             "addressCity": "Rio de Janeiro",
             "addressState": "Rio de Janeiro",
         }
+        if loc_id:
+            d["addressLocationId"] = loc_id
         q = _quartos_range(p)
         if q:
             d["bedrooms"] = q
@@ -161,7 +165,6 @@ class GlueScraper(Scraper):
         """Um ou mais addressLocationId conforme o modo de localização."""
         if loc.tipo == "bairro" and loc.bairros:
             return [_loc_id(loc.zona, b) for b in loc.bairros]
-        # zona / poligono começam da zona inteira; refino é feito no código
         return [_loc_id(loc.zona)]
 
     async def _resolver_ruas(
@@ -273,9 +276,8 @@ class GlueScraper(Scraper):
             if not loc_ids:  # autocomplete não achou: cai para a zona inteira
                 loc_ids = self._locs(loc)
             alvo = SCAN_CAP_REFINO
-        elif loc.tipo == "poligono":
-            loc_ids = self._locs(loc)
-            alvo = SCAN_CAP_REFINO
+        elif loc.tipo == "poligono" and len(loc.poligono) >= 3:
+            return await self._buscar_poligono(params, client, headers, business, size)
         else:
             loc_ids = self._locs(loc)
             alvo = params.limite_por_portal
@@ -300,6 +302,34 @@ class GlueScraper(Scraper):
                 if len(listings) < size:
                     break
         return out
+
+    async def _buscar_poligono(self, params: BuscaParams, client: httpx.AsyncClient,
+                               headers: dict, business: str, size: int) -> list[Imovel]:
+        """Modo polígono: a API filtra por `viewport` (caixa que envolve o desenho,
+        formato "lonLeste,latNorte|lonOeste,latSul"); o recorte fino pelo polígono é
+        feito aqui, e só o que cai dentro conta para o limite. Varre até 4x o limite
+        (mín. SCAN_CAP_REFINO) para compensar o que fica na caixa mas fora do desenho."""
+        pol = params.localizacao.poligono
+        lats, lons = [pt[0] for pt in pol], [pt[1] for pt in pol]
+        viewport = f"{max(lons)},{max(lats)}|{min(lons)},{min(lats)}"
+        alvo = params.limite_por_portal
+        teto_bruto = max(SCAN_CAP_REFINO, alvo * 4)
+        out: list[Imovel] = []
+        frm = 0
+        while len(out) < alvo and frm < teto_bruto:
+            q = self._params_base(params, None, size, frm)
+            q["viewport"] = viewport
+            r = await client.get(GLUE_URL, params=q, headers=headers, timeout=30)
+            r.raise_for_status()
+            listings = r.json().get("search", {}).get("result", {}).get("listings", [])
+            for it in listings:
+                im = self._to_imovel(it, business)
+                if im and geo.dentro_do_poligono(im.lat, im.lon, pol):
+                    out.append(im)
+            frm += size
+            if len(listings) < size:
+                break
+        return out[:alvo]
 
     async def imobiliarias(self, params: BuscaParams, client: httpx.AsyncClient) -> list[dict]:
         """Agrupa os anúncios do portal por anunciante (imobiliária/corretor).
